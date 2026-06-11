@@ -6,8 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest"
   },
   "dependencies": {
@@ -40,10 +40,10 @@
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "drizzle-kit": "latest",
-    "eslint": "latest",
+    "eslint": "^9.39.1",
     "eslint-config-next": "latest",
     "tailwindcss": "latest",
-    "typescript": "latest",
+    "typescript": "^5.9.2",
     "vitest": "latest"
   }
 }

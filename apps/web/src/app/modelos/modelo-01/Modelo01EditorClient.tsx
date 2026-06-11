@@ -1,7 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowUpRight,
+  BadgeInfo,
+  FileDown,
+  Paperclip,
+  RefreshCw,
+  Save
+} from "lucide-react";
 
 import type { CampoModelo, ValorCampoModelo } from "./page";
 
@@ -13,11 +20,6 @@ type CampoDraft = {
   origem: string;
   revisado: boolean;
   observacao: string;
-};
-
-type Props = {
-  campos: CampoModelo[]; 
-  valores: ValorCampoModelo[];
 };
 
 type AnexoItem = {
@@ -34,12 +36,26 @@ type AnexoItem = {
   created_at: string;
 };
 
+type Props = {
+  campos: CampoModelo[];
+  contexto: {
+    prestacaoContasId: string;
+    totalCampos: number;
+    totalCamposEditaveis: number;
+    totalCamposBloqueados: number;
+    totalFuncoes: number;
+  };
+  prestacaoContasIdInicial?: string;
+  valores: ValorCampoModelo[];
+};
+
 function buildInitialDrafts(campos: CampoModelo[], valores: ValorCampoModelo[]) {
   const mapa = new Map(valores.map((valor) => [valor.campo_modelo_id, valor]));
 
   return Object.fromEntries(
     campos.map((campo) => {
       const valor = mapa.get(campo.id);
+
       return [
         campo.id,
         {
@@ -56,10 +72,56 @@ function buildInitialDrafts(campos: CampoModelo[], valores: ValorCampoModelo[]) 
   ) as Record<string, CampoDraft>;
 }
 
-export function Modelo01EditorClient({ campos, valores }: Props) {
-  const searchParams = useSearchParams();
-  const prestacaoInicial = searchParams.get("prestacao_contas_id") ?? "";
-  const [prestacaoContasId, setPrestacaoContasId] = useState(prestacaoInicial);
+function groupCamposBySecao(campos: CampoModelo[]) {
+  const grupos = new Map<string, CampoModelo[]>();
+  const ordem: string[] = [];
+
+  for (const campo of campos) {
+    const secao = campo.secao?.trim() || "Sem seção";
+    if (!grupos.has(secao)) {
+      grupos.set(secao, []);
+      ordem.push(secao);
+    }
+    grupos.get(secao)?.push(campo);
+  }
+
+  return ordem.map((secao) => ({
+    secao,
+    campos: grupos.get(secao) ?? []
+  }));
+}
+
+async function fetchValoresModelo01(prestacaoContasId: string) {
+  const response = await fetch(
+    `/api/modelos/modelo-01/valores?prestacao_contas_id=${encodeURIComponent(prestacaoContasId)}`
+  );
+
+  if (!response.ok) {
+    throw new Error("Falha ao carregar valores.");
+  }
+
+  const data = (await response.json()) as {
+    valores: ValorCampoModelo[];
+  };
+  return data.valores;
+}
+
+async function fetchAnexosModelo01(prestacaoContasId: string) {
+  const response = await fetch(
+    `/api/anexos/modelo-01?prestacao_contas_id=${encodeURIComponent(prestacaoContasId)}`
+  );
+
+  if (!response.ok) {
+    return [];
+  }
+
+  const data = (await response.json()) as { anexos: AnexoItem[] };
+  return data.anexos;
+}
+
+export function Modelo01EditorClient({ campos, contexto, prestacaoContasIdInicial, valores }: Props) {
+  const [prestacaoContasId, setPrestacaoContasId] = useState(prestacaoContasIdInicial ?? "");
+  const initialLoadDoneRef = useRef(false);
   const [drafts, setDrafts] = useState<Record<string, CampoDraft>>(() =>
     buildInitialDrafts(campos, valores)
   );
@@ -68,16 +130,36 @@ export function Modelo01EditorClient({ campos, valores }: Props) {
   const [anexoCampoId, setAnexoCampoId] = useState("");
   const [anexoEscopo, setAnexoEscopo] = useState("modelo");
   const [savingCampoId, setSavingCampoId] = useState<string | null>(null);
-  const [status, setStatus] = useState("Aguardando prestacao de contas.");
+  const [status, setStatus] = useState("Aguardando prestação de contas.");
 
+  const camposAgrupados = useMemo(() => groupCamposBySecao(campos), [campos]);
   const editaveis = useMemo(() => campos.filter((campo) => campo.editavel), [campos]);
 
   useEffect(() => {
-    setDrafts(buildInitialDrafts(campos, valores));
-  }, [campos, valores]);
+    if (!prestacaoContasIdInicial || initialLoadDoneRef.current) {
+      return;
+    }
 
-  async function carregarValores() {
-    if (!prestacaoContasId.trim()) {
+    initialLoadDoneRef.current = true;
+    void (async () => {
+      try {
+        const [valoresCarregados, anexosCarregados] = await Promise.all([
+          fetchValoresModelo01(prestacaoContasIdInicial),
+          fetchAnexosModelo01(prestacaoContasIdInicial)
+        ]);
+        setDrafts(buildInitialDrafts(campos, valoresCarregados));
+        setAnexos(anexosCarregados);
+        setStatus("Valores carregados.");
+      } catch {
+        setStatus("Não foi possível carregar os valores.");
+      }
+    })();
+  }, [campos, prestacaoContasIdInicial]);
+
+  async function carregarValores(prestacaoId?: string) {
+    const id = (prestacaoId ?? prestacaoContasId).trim();
+
+    if (!id) {
       setStatus("Informe um prestacao_contas_id para carregar os valores.");
       return;
     }
@@ -85,42 +167,26 @@ export function Modelo01EditorClient({ campos, valores }: Props) {
     setStatus("Carregando valores do banco...");
 
     try {
-      const response = await fetch(
-        `/api/modelos/modelo-01/valores?prestacao_contas_id=${encodeURIComponent(prestacaoContasId)}`
-      );
-      if (!response.ok) {
-        throw new Error("Falha ao carregar valores.");
-      }
-
-      const data = (await response.json()) as {
-        valores: ValorCampoModelo[];
-      };
-      setDrafts(buildInitialDrafts(campos, data.valores));
-      await carregarAnexos();
+      const [valoresCarregados, anexosCarregados] = await Promise.all([
+        fetchValoresModelo01(id),
+        fetchAnexosModelo01(id)
+      ]);
+      setDrafts(buildInitialDrafts(campos, valoresCarregados));
+      setAnexos(anexosCarregados);
       setStatus("Valores carregados.");
     } catch {
-      setStatus("Nao foi possivel carregar os valores.");
+      setStatus("Não foi possível carregar os valores.");
     }
   }
 
-  async function carregarAnexos() {
-    if (!prestacaoContasId.trim()) {
-      return;
-    }
+  async function carregarAnexos(prestacaoId?: string) {
+    const id = (prestacaoId ?? prestacaoContasId).trim();
+    if (!id) return;
 
     try {
-      const response = await fetch(
-        `/api/anexos/modelo-01?prestacao_contas_id=${encodeURIComponent(prestacaoContasId)}`
-      );
-
-      if (!response.ok) {
-        return;
-      }
-
-      const data = (await response.json()) as { anexos: AnexoItem[] };
-      setAnexos(data.anexos);
+      setAnexos(await fetchAnexosModelo01(id));
     } catch {
-      // Mantem a listagem anterior quando a consulta falhar.
+      // Mantém a listagem anterior quando a consulta falhar.
     }
   }
 
@@ -180,7 +246,7 @@ export function Modelo01EditorClient({ campos, valores }: Props) {
 
       setStatus(`${campo.rotulo} salvo com sucesso.`);
     } catch {
-      setStatus(`Nao foi possivel salvar ${campo.rotulo}.`);
+      setStatus(`Não foi possível salvar ${campo.rotulo}.`);
     } finally {
       setSavingCampoId(null);
     }
@@ -221,198 +287,275 @@ export function Modelo01EditorClient({ campos, valores }: Props) {
       setAnexoEscopo("modelo");
       setStatus("Anexo enviado com sucesso.");
     } catch {
-      setStatus("Nao foi possivel enviar o anexo.");
+      setStatus("Não foi possível enviar o anexo.");
     }
   }
 
   return (
-    <section className="rounded-md border border-[var(--line)] bg-white">
-      <div className="border-b border-[var(--line)] px-5 py-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">Campos do modelo</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              Campos oficiais bloqueados, valores editaveis com rastreio e salvamento campo a campo.
-            </p>
+    <section className="overflow-hidden rounded-[32px] border border-white/70 bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fd_100%)] shadow-[0_24px_80px_rgba(16,24,40,0.08)]">
+      <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#233876_0%,#2545d7_52%,#0f766e_100%)] px-6 py-6 text-white md:px-8 md:py-8">
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-white/15 bg-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">
+                  <BadgeInfo className="mr-1 inline-block size-3 align-[-1px]" />
+                  Prestação aberta
+                </span>
+                <span className="rounded-full border border-white/15 bg-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">
+                  {contexto.totalCamposBloqueados} bloqueados
+                </span>
+                <span className="rounded-full border border-white/15 bg-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">
+                  {contexto.totalFuncoes} funções
+                </span>
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">Modelo 01 - Rol de Responsáveis</h2>
+                <p className="max-w-2xl text-sm leading-6 text-white/78 md:text-base">
+                  Campos oficiais bloqueados, valores editáveis com rastreio, anexos por contexto e salvamento
+                  campo a campo no mesmo padrão visual da aplicação.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:min-w-[280px] sm:grid-cols-2">
+              <div className="rounded-[20px] border border-white/15 bg-white/12 px-4 py-3 backdrop-blur">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">Campos</p>
+                <p className="mt-1 text-2xl font-semibold text-white">{contexto.totalCampos}</p>
+              </div>
+              <div className="rounded-[20px] border border-white/15 bg-white/12 px-4 py-3 backdrop-blur">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">Editáveis</p>
+                <p className="mt-1 text-2xl font-semibold text-white">{contexto.totalCamposEditaveis}</p>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-col gap-2 md:min-w-[360px]">
-            <label className="block text-sm">
-              <span className="mb-2 block font-medium">prestacao_contas_id</span>
+
+          <div className="flex flex-col gap-3 rounded-[26px] border border-white/15 bg-white/12 p-4 backdrop-blur md:flex-row md:items-end md:justify-between">
+            <label className="block flex-1">
+              <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
+                Prestação de contas ID
+              </span>
               <input
-                className="w-full rounded border border-[var(--line)] bg-[#f9fbfa] px-3 py-2 text-sm outline-none"
+                className="w-full rounded-full border border-white/15 bg-white px-4 py-3 font-mono text-xs text-slate-900 outline-none transition focus:border-[#2545d7]"
                 onChange={(event) => setPrestacaoContasId(event.target.value)}
-                placeholder="Cole o id da prestacao de contas"
+                placeholder="Cole o id da prestação de contas"
                 value={prestacaoContasId}
               />
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
-                className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white"
-                onClick={carregarValores}
+                className="inline-flex items-center gap-2 rounded-full bg-[#101828] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-300 transition hover:-translate-y-0.5"
+                onClick={() => void carregarValores()}
                 type="button"
               >
+                <RefreshCw className="size-4" />
                 Carregar valores
               </button>
-              <div className="rounded-md border border-[var(--line)] px-3 py-2 text-sm text-[var(--muted)]">
-                {status}
-              </div>
+              <button
+                className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-lg shadow-black/5 transition hover:-translate-y-0.5 hover:bg-slate-50"
+                onClick={() => void carregarAnexos()}
+                type="button"
+              >
+                <Paperclip className="size-4" />
+                Recarregar anexos
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-[20px] border border-white/15 bg-white/12 px-4 py-3 backdrop-blur">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Campos</p>
+              <p className="mt-1 text-2xl font-semibold text-white">{contexto.totalCampos}</p>
+            </div>
+            <div className="rounded-[20px] border border-white/15 bg-white/12 px-4 py-3 backdrop-blur">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Editáveis</p>
+              <p className="mt-1 text-2xl font-semibold text-white">{contexto.totalCamposEditaveis}</p>
+            </div>
+            <div className="rounded-[20px] border border-white/15 bg-white/12 px-4 py-3 backdrop-blur">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Anexos</p>
+              <p className="mt-1 text-2xl font-semibold text-white">{anexos.length}</p>
+            </div>
+            <div className="rounded-[20px] border border-white/15 bg-white/12 px-4 py-3 backdrop-blur">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Status</p>
+              <p className="mt-1 text-sm font-medium text-white">{status}</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 p-5 md:grid-cols-2">
-        {campos.map((campo) => {
-          const draft = drafts[campo.id];
-          const isSaving = savingCampoId === campo.id;
-
-          if (!campo.editavel) {
-            return (
-              <div className="rounded-md border border-[var(--line)] bg-[#f9fbfa] p-4" key={campo.id}>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-[var(--foreground)]">{campo.rotulo}</p>
-                    <p className="mt-1 text-xs text-[var(--muted)]">{campo.secao ?? "Sem secao"}</p>
-                  </div>
-                  <span className="rounded-full border border-[var(--line)] px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
-                    Bloqueado
-                  </span>
-                </div>
-                <div className="mt-3 grid gap-2 text-xs text-[var(--muted)]">
-                  <p>Chave: {campo.chave}</p>
-                  <p>Tipo: {campo.tipo_campo}</p>
-                  <p>{campo.obrigatorio ? "Obrigatorio" : "Opcional"}</p>
-                  <p>{campo.texto_oficial ? "Texto oficial da IN" : "Valor controlado"}</p>
-                </div>
+      <div className="space-y-6 p-6">
+        {camposAgrupados.map((grupo) => (
+          <section
+            className="overflow-hidden rounded-[24px] border border-slate-100 bg-white shadow-[0_18px_50px_rgba(20,32,30,0.06)]"
+            key={grupo.secao}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4">
+              <div>
+                <h3 className="text-base font-semibold text-[var(--foreground)]">{grupo.secao}</h3>
+                <p className="mt-1 text-sm text-[var(--muted)]">{grupo.campos.length} campos nesta seção</p>
               </div>
-            );
-          }
-
-          return (
-            <div className="rounded-md border border-[var(--line)] bg-[#f9fbfa] p-4" key={campo.id}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-[var(--foreground)]">{campo.rotulo}</p>
-                  <p className="mt-1 text-xs text-[var(--muted)]">{campo.secao ?? "Sem secao"}</p>
-                </div>
-                <span className="rounded-full border border-[var(--line)] px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
-                  Editavel
-                </span>
-              </div>
-
-              <div className="mt-3 grid gap-3">
-                {campo.tipo_campo === "texto_longo" ? (
-                  <textarea
-                    className="min-h-28 rounded border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none"
-                    onBlur={() => salvarCampo(campo)}
-                    onChange={(event) => updateDraft(campo.id, { valor_texto: event.target.value })}
-                    value={draft?.valor_texto ?? ""}
-                  />
-                ) : campo.tipo_campo === "data" ? (
-                  <input
-                    className="rounded border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none"
-                    onBlur={() => salvarCampo(campo)}
-                    onChange={(event) => updateDraft(campo.id, { valor_data: event.target.value })}
-                    type="date"
-                    value={draft?.valor_data ?? ""}
-                  />
-                ) : campo.tipo_campo === "numero" ? (
-                  <input
-                    className="rounded border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none"
-                    onBlur={() => salvarCampo(campo)}
-                    onChange={(event) => updateDraft(campo.id, { valor_numero: event.target.value })}
-                    type="number"
-                    value={draft?.valor_numero ?? ""}
-                  />
-                ) : campo.tipo_campo === "booleano" ? (
-                  <label className="flex items-center gap-2 rounded border border-[var(--line)] bg-white px-3 py-2 text-sm">
-                    <input
-                      checked={draft?.valor_booleano ?? false}
-                      onChange={(event) => updateDraft(campo.id, { valor_booleano: event.target.checked })}
-                      type="checkbox"
-                    />
-                    Marcar como verdadeiro
-                  </label>
-                ) : (
-                  <input
-                    className="rounded border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none"
-                    onBlur={() => salvarCampo(campo)}
-                    onChange={(event) => updateDraft(campo.id, { valor_texto: event.target.value })}
-                    value={draft?.valor_texto ?? ""}
-                  />
-                )}
-
-                <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
-                  <span>Chave: {campo.chave}</span>
-                  <span>Tipo: {campo.tipo_campo}</span>
-                  <span>{campo.obrigatorio ? "Obrigatorio" : "Opcional"}</span>
-                </div>
-
-                <div className="flex items-center justify-between gap-3">
-                  <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
-                    <input
-                      checked={draft?.revisado ?? false}
-                      onChange={(event) => updateDraft(campo.id, { revisado: event.target.checked })}
-                      type="checkbox"
-                    />
-                    Revisado
-                  </label>
-
-                  <button
-                    className="rounded-md border border-[var(--line)] px-3 py-2 text-sm font-medium text-[var(--foreground)]"
-                    onClick={() => salvarCampo(campo)}
-                    type="button"
-                    disabled={isSaving}
-                  >
-                    {isSaving ? "Salvando..." : "Salvar"}
-                  </button>
-                </div>
-              </div>
+              <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                {grupo.campos.filter((campo) => campo.editavel).length} editáveis
+              </span>
             </div>
-          );
-        })}
+
+            <div className="grid gap-4 p-4 md:grid-cols-2">
+              {grupo.campos.map((campo) => {
+                const draft = drafts[campo.id];
+                const isSaving = savingCampoId === campo.id;
+
+                if (!campo.editavel) {
+                  return (
+                    <div className="rounded-[20px] border border-slate-100 bg-[#fbfcfe] p-4 shadow-sm" key={campo.id}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-[var(--foreground)]">{campo.rotulo}</p>
+                          <p className="mt-1 text-xs text-[var(--muted)]">{campo.secao ?? "Sem seção"}</p>
+                        </div>
+                        <span className="rounded-full border border-slate-200 px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                          Bloqueado
+                        </span>
+                      </div>
+                      <div className="mt-3 grid gap-2 text-xs text-[var(--muted)]">
+                        <p>Chave: {campo.chave}</p>
+                        <p>Tipo: {campo.tipo_campo}</p>
+                        <p>{campo.obrigatorio ? "Obrigatório" : "Opcional"}</p>
+                        <p>{campo.texto_oficial ? "Texto oficial da IN" : "Valor controlado"}</p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="rounded-[20px] border border-slate-100 bg-[#fbfcfe] p-4 shadow-sm" key={campo.id}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-[var(--foreground)]">{campo.rotulo}</p>
+                        <p className="mt-1 text-xs text-[var(--muted)]">{campo.secao ?? "Sem seção"}</p>
+                      </div>
+                      <span className="rounded-full border border-[#cfe2de] bg-[#edf6f3] px-2 py-1 text-[10px] uppercase tracking-wide text-[#155d53]">
+                        Editável
+                      </span>
+                    </div>
+
+                    <div className="mt-3 grid gap-3">
+                      {campo.tipo_campo === "texto_longo" ? (
+                        <textarea
+                          className="min-h-28 rounded-full border border-slate-200 bg-[#fcfdfd] px-3 py-2 text-sm outline-none transition focus:border-[#2545d7]"
+                          onBlur={() => salvarCampo(campo)}
+                          onChange={(event) => updateDraft(campo.id, { valor_texto: event.target.value })}
+                          value={draft?.valor_texto ?? ""}
+                        />
+                      ) : campo.tipo_campo === "data" ? (
+                        <input
+                          className="rounded-full border border-slate-200 bg-[#fcfdfd] px-3 py-2 text-sm outline-none transition focus:border-[#2545d7]"
+                          onBlur={() => salvarCampo(campo)}
+                          onChange={(event) => updateDraft(campo.id, { valor_data: event.target.value })}
+                          type="date"
+                          value={draft?.valor_data ?? ""}
+                        />
+                      ) : campo.tipo_campo === "numero" ? (
+                        <input
+                          className="rounded-full border border-slate-200 bg-[#fcfdfd] px-3 py-2 text-sm outline-none transition focus:border-[#2545d7]"
+                          onBlur={() => salvarCampo(campo)}
+                          onChange={(event) => updateDraft(campo.id, { valor_numero: event.target.value })}
+                          type="number"
+                          value={draft?.valor_numero ?? ""}
+                        />
+                      ) : campo.tipo_campo === "booleano" ? (
+                        <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-[#fcfdfd] px-3 py-2 text-sm">
+                          <input
+                            checked={draft?.valor_booleano ?? false}
+                            onChange={(event) => updateDraft(campo.id, { valor_booleano: event.target.checked })}
+                            type="checkbox"
+                          />
+                          Marcar como verdadeiro
+                        </label>
+                      ) : (
+                        <input
+                          className="rounded-full border border-slate-200 bg-[#fcfdfd] px-3 py-2 text-sm outline-none transition focus:border-[#2545d7]"
+                          onBlur={() => salvarCampo(campo)}
+                          onChange={(event) => updateDraft(campo.id, { valor_texto: event.target.value })}
+                          value={draft?.valor_texto ?? ""}
+                        />
+                      )}
+
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+                        <span>Chave: {campo.chave}</span>
+                        <span>Tipo: {campo.tipo_campo}</span>
+                        <span>{campo.obrigatorio ? "Obrigatório" : "Opcional"}</span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3">
+                        <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
+                          <input
+                            checked={draft?.revisado ?? false}
+                            onChange={(event) => updateDraft(campo.id, { revisado: event.target.checked })}
+                            type="checkbox"
+                          />
+                          Revisado
+                        </label>
+
+                        <button
+                          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={() => salvarCampo(campo)}
+                          type="button"
+                          disabled={isSaving}
+                        >
+                          <Save className="size-4" />
+                          {isSaving ? "Salvando..." : "Salvar"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ))}
       </div>
 
-      <div className="border-t border-[var(--line)] p-5">
-        <div className="rounded-md border border-[var(--line)] bg-[#fbfcfb] p-4">
-          <div className="flex items-center justify-between gap-3">
+      <div className="border-t border-slate-100 p-6">
+        <div className="rounded-[24px] border border-slate-100 bg-white p-5 shadow-[0_18px_50px_rgba(20,32,30,0.06)]">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
               <h3 className="text-base font-semibold text-[var(--foreground)]">Anexos do modelo</h3>
               <p className="mt-1 text-sm text-[var(--muted)]">
-                Anexe portarias, notas, extratos e documentos de suporte vinculados a esta prestacao.
+                Anexe portarias, notas, extratos e documentos de suporte vinculados a esta prestação.
               </p>
               <p className="mt-1 text-xs text-[var(--muted)]">
-                Formatos aceitos: PDF, Word, Excel e imagens. O arquivo fica vinculado a esta prestacao e ao campo
+                Formatos aceitos: PDF, Word, Excel e imagens. O arquivo fica vinculado a esta prestação e ao campo
                 escolhido, quando houver.
               </p>
             </div>
             <button
-              className="rounded-md border border-[var(--line)] px-3 py-2 text-sm font-medium text-[var(--foreground)]"
-              onClick={carregarAnexos}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              onClick={() => void carregarAnexos()}
               type="button"
             >
+              <RefreshCw className="size-4" />
               Recarregar
             </button>
           </div>
 
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <select
-              className="rounded border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none"
+              className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
               onChange={(event) => setAnexoEscopo(event.target.value)}
               value={anexoEscopo}
             >
               <option value="modelo">Anexo do modelo</option>
-              <option value="secao">Anexo da secao</option>
+              <option value="secao">Anexo da seção</option>
               <option value="campo">Anexo do campo</option>
-              <option value="responsavel">Anexo do responsavel</option>
+              <option value="responsavel">Anexo do responsável</option>
             </select>
 
             <select
-              className="rounded border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none"
+              className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
               onChange={(event) => setAnexoCampoId(event.target.value)}
               value={anexoCampoId}
             >
-              <option value="">Sem campo especifico</option>
+              <option value="">Sem campo específico</option>
               {campos.map((campo) => (
                 <option key={campo.id} value={campo.id}>
                   {campo.rotulo}
@@ -421,7 +564,7 @@ export function Modelo01EditorClient({ campos, valores }: Props) {
             </select>
 
             <input
-              className="rounded border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none"
+              className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-[#2545d7]"
               onChange={(event) => setAnexoArquivo(event.target.files?.[0] ?? null)}
               type="file"
             />
@@ -429,42 +572,45 @@ export function Modelo01EditorClient({ campos, valores }: Props) {
 
           <div className="mt-3 flex justify-end">
             <button
-              className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white"
+              className="inline-flex items-center gap-2 rounded-full bg-[#101828] px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5"
               onClick={enviarAnexo}
               type="button"
             >
+              <Paperclip className="size-4" />
               Anexar arquivo
             </button>
           </div>
 
           <div className="mt-4 space-y-3">
             {anexos.length === 0 ? (
-              <div className="rounded border border-[var(--line)] bg-white px-3 py-3 text-sm text-[var(--muted)]">
+              <div className="rounded-[18px] border border-slate-200 bg-white px-3 py-3 text-sm text-[var(--muted)]">
                 Nenhum anexo carregado ainda.
               </div>
             ) : (
               anexos.map((anexo) => (
-                <div className="rounded border border-[var(--line)] bg-white px-3 py-3" key={anexo.id}>
+                <div className="rounded-[18px] border border-slate-200 bg-white px-3 py-3" key={anexo.id}>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm font-medium text-[var(--foreground)]">{anexo.nome_original}</p>
                     <div className="flex flex-wrap gap-2 text-xs">
                       {anexo.signed_url_original ? (
                         <a
-                          className="rounded border border-[var(--line)] px-2 py-1 font-medium text-[var(--foreground)]"
+                          className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-2 py-1 font-medium text-[var(--foreground)] transition hover:bg-slate-50"
                           href={anexo.signed_url_original}
                           rel="noreferrer"
                           target="_blank"
                         >
+                          <ArrowUpRight className="size-3" />
                           Abrir original
                         </a>
                       ) : null}
                       {anexo.signed_url_pdf ? (
                         <a
-                          className="rounded border border-[var(--line)] px-2 py-1 font-medium text-[var(--foreground)]"
+                          className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-2 py-1 font-medium text-[var(--foreground)] transition hover:bg-slate-50"
                           href={anexo.signed_url_pdf}
                           rel="noreferrer"
                           target="_blank"
                         >
+                          <FileDown className="size-3" />
                           Abrir PDF
                         </a>
                       ) : null}
@@ -474,7 +620,7 @@ export function Modelo01EditorClient({ campos, valores }: Props) {
                     Escopo: {anexo.escopo} | Status: {anexo.status}
                   </p>
                   <p className="mt-1 text-xs text-[var(--muted)]">
-                    Campo: {anexo.campo_modelo_id ?? "sem vinculo"}
+                    Campo: {anexo.campo_modelo_id ?? "sem vínculo"}
                   </p>
                 </div>
               ))
@@ -483,8 +629,8 @@ export function Modelo01EditorClient({ campos, valores }: Props) {
         </div>
       </div>
 
-      <div className="border-t border-[var(--line)] px-5 py-4 text-sm text-[var(--muted)]">
-        {editaveis.length} campos editaveis carregados para revisao e salvamento.
+      <div className="border-t border-slate-100 px-6 py-4 text-sm text-[var(--muted)]">
+        {editaveis.length} campos editáveis carregados para revisão e salvamento.
       </div>
     </section>
   );

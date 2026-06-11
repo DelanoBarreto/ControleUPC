@@ -38,6 +38,7 @@ export async function POST(request: Request) {
     payload = {
       codigo_municipio: String(formData.get("codigo_municipio") ?? ""),
       exercicio: Number(formData.get("exercicio") ?? ""),
+      prestacao_contas_id: String(formData.get("prestacao_contas_id") ?? "").trim() || undefined,
       arquivos_detectados: JSON.parse(arquivos_detectados_json) as ImportacaoArquivoPayload[]
     };
   } else {
@@ -203,6 +204,7 @@ export async function POST(request: Request) {
     job_id: jobId,
     municipio_id: municipio.id,
     exercicio_id: exercicio.id,
+    prestacao_contas_id: payload.prestacao_contas_id ?? null,
     storage_base_path: storageBasePath
   });
 }

@@ -3,6 +3,7 @@ import type { ArquivoDetectadoImportacao } from "@controle-upc/shared";
 export type ImportacaoLotePayload = {
   codigo_municipio: string;
   exercicio: number;
+  prestacao_contas_id?: string;
   arquivos_detectados: ArquivoDetectadoImportacao[];
 };
 

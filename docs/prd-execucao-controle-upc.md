@@ -234,3 +234,26 @@ Retomada recomendada:
 - revisar `apps/web/src/app/api/anexos/modelo-01/route.ts`;
 - revisar `apps/web/src/app/api/modelos/modelo-01/valores/route.ts`;
 - continuar com o fluxo de anexos e exportacao.
+
+## 13. Atualizacao De 2026-06-11
+
+Estado consolidado nesta retomada:
+
+- repositorio clonado em `C:\Antigravity\Projetos\ControleUPC`;
+- dependencias instaladas e `pnpm-lock.yaml` gerado;
+- scripts raiz atualizados para usar `corepack pnpm`, porque este ambiente nao tinha shim global de `pnpm`;
+- `apps/web/package.json` passou a usar `eslint .` e `next typegen && tsc --noEmit`;
+- `apps/web/tsconfig.json` ganhou `baseUrl` local para resolver `@/*` corretamente;
+- `apps/web/next.config.ts` ficou apenas com `reactStrictMode`, removendo a antiga configuracao experimental;
+- `apps/web/src/app/modelos/modelo-01/Modelo01EditorClient.tsx` agora carrega valores e anexos automaticamente quando recebe `prestacao_contas_id`;
+- `apps/web/src/app/dashboard/page.tsx`, `apps/web/src/app/importacoes/page.tsx` e `apps/web/src/app/modelos/modelo-01/page.tsx` usam `next/link` para navegacao interna;
+- validacoes executadas com sucesso: `corepack pnpm check`, `corepack pnpm build` e rota `/modelos/modelo-01?prestacao_contas_id=00000000-0000-0000-0000-000000000001` retornando HTTP 200 no dev server;
+- o dev server do Next sobe corretamente com `corepack pnpm --filter @controle-upc/web dev --hostname 127.0.0.1 --port 3000`;
+- `next typegen` precisa rodar antes do `tsc` neste ambiente do Next 16 para manter os tipos gerados sincronizados.
+
+Proximo passo recomendado:
+
+1. Criar a tela de selecao real de prestacao de contas por municipio, exercicio e UPC.
+2. Abrir o Modelo 01 a partir dessa selecao com `prestacao_contas_id` na query string.
+3. Evoluir anexos para conversao e consolidacao no pacote final, mantendo o original acessivel.
+4. Seguir para exportacao PDF e Excel.
