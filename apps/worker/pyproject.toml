@@ -1,0 +1,30 @@
+[project]
+name = "controle-upc-worker"
+version = "0.1.0"
+description = "Worker FastAPI para processamento de CSV, PDF, OCR, Excel, Word e LLM do Controle UPC."
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "pydantic",
+  "python-multipart",
+  "pymupdf",
+  "pypdf",
+  "pytesseract",
+  "pillow",
+  "pandas",
+  "openpyxl",
+  "python-docx",
+  "httpx",
+  "supabase"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "ruff"
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

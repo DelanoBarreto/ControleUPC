@@ -1,0 +1,21 @@
+{
+  "name": "controle-upc",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Sistema web para montagem da prestacao de contas de UPC conforme IN 01/2025.",
+  "scripts": {
+    "dev": "pnpm --filter @controle-upc/web dev",
+    "dev:web": "pnpm --filter @controle-upc/web dev",
+    "dev:worker": "pnpm --filter @controle-upc/worker dev",
+    "build": "pnpm --filter @controle-upc/web build",
+    "typecheck": "pnpm --filter @controle-upc/web typecheck && pnpm --filter @controle-upc/shared typecheck",
+    "lint": "pnpm --filter @controle-upc/web lint",
+    "test": "pnpm --filter @controle-upc/web test",
+    "check": "pnpm typecheck && pnpm lint"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@10.0.0"
+}

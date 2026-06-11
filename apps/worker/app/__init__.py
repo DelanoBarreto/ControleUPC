@@ -1,0 +1,1 @@
+"""Controle UPC worker package."""
