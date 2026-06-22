@@ -18,11 +18,46 @@ Sistema web para montagem da prestacao de contas de Unidades Prestadoras de Cont
 
 ## Documento Mestre
 
-O planejamento vivo do projeto esta em:
+O documento consolidado do projeto esta em:
 
-[docs/plano-controle-upc.md](docs/plano-controle-upc.md)
+[docs/controle-upc-documento-mestre.md](docs/controle-upc-documento-mestre.md)
 
-Atualize esse documento sempre que um novo modelo, regra de banco, tela, importacao ou exportacao for definido.
+## Retomada Em Outro Computador
+
+Comece pelo handoff:
+
+[docs/handoff-2026-06-21.md](docs/handoff-2026-06-21.md)
+
+Depois consulte o checklist:
+
+[docs/checklist-execucao-controle-upc.md](docs/checklist-execucao-controle-upc.md)
+
+## Guia Tecnico De Execucao
+
+Use este guia como referencia operacional para implementar banco, templates, importacao SIM, renderizador, anexos e exportacao:
+
+[docs/guia-tecnico-execucao-controle-upc.md](docs/guia-tecnico-execucao-controle-upc.md)
+
+## Plano De Desenvolvimento
+
+Use este arquivo para guiar a ordem de implementacao e a pesquisa tecnica do projeto:
+
+[docs/plano-desenvolvimento-controle-upc.md](docs/plano-desenvolvimento-controle-upc.md)
+
+## Decisoes Arquiteturais
+
+A decisao central do projeto e que os modelos da IN devem ser templates versionados no banco, nao telas fixas no codigo:
+
+[docs/adr-001-modelos-in-versionados.md](docs/adr-001-modelos-in-versionados.md)
+
+## Direcao Visual
+
+A direcao visual da area logada e das telas operacionais esta documentada em:
+
+[docs/direcao-visual-controle-upc.md](docs/direcao-visual-controle-upc.md)
+
+O shell interno tem largura maxima de `1440px`, sidebar clara, topbar compacta e
+layout centralizado em monitores maiores.
 
 ## Documento De Continuidade
 
@@ -44,6 +79,8 @@ Use este arquivo quando for retomar o projeto em outro computador:
 ## MVP
 
 O primeiro fluxo completo sera o Modelo 01 - Rol de Responsaveis.
+
+O Modelo 01 deve ser implementado como primeiro caso do renderizador generico de modelos da IN.
 
 Ele deve validar:
 

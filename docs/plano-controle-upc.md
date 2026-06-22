@@ -8,6 +8,36 @@ O sistema deve reduzir digitacao manual, importar dados auxiliares dos arquivos 
 
 Este documento deve ser mantido como referencia permanente do projeto. Sempre que um novo modelo, modulo, regra de banco, tela, fluxo de importacao ou exportacao for definido, este arquivo deve ser atualizado.
 
+Para a ordem de implementacao e pesquisa tecnica, use tambem:
+
+- `docs/plano-desenvolvimento-controle-upc.md`
+- `docs/guia-tecnico-execucao-controle-upc.md`
+
+A decisao arquitetural sobre modelos versionados esta registrada em:
+
+- `docs/adr-001-modelos-in-versionados.md`
+
+Referencias adicionais de pesquisa, agora aceitas como apoio mas nao como fonte principal:
+
+- `docs/handoff-2026-06-21.md`: ponto inicial para continuar em outro computador.
+- `docs/controle-upc-documento-mestre.md`: consolidacao oficial de visao, estado e backlog.
+- `docs/checklist-execucao-controle-upc.md`: status executavel por modulo.
+- `docs/20260620000100_templates_versionados.sql`: rascunho historico de schema. Serve como referencia tecnica, mas o schema real do projeto e o das migrations aplicadas no Supabase.
+- `docs/design-tokens-controle-upc.md`: tokens obrigatorios da area logada em padrao SaaS moderno operacional.
+- `docs/decisao-visual-saas-moderno-operacional.md`: decisao visual vigente. Substitui a regra anterior que proibia gradientes, roxo/lilas, sombras ou visual de dashboard moderno.
+
+Hierarquia pratica quando houver divergencia:
+
+1. `docs/adr-001-modelos-in-versionados.md`
+2. `docs/decisao-visual-saas-moderno-operacional.md` para decisoes de UI/UX
+3. `docs/design-tokens-controle-upc.md` para tokens visuais
+4. `docs/controle-upc-documento-mestre.md`
+5. `docs/checklist-execucao-controle-upc.md`
+6. `docs/plano-controle-upc.md`
+7. `docs/plano-desenvolvimento-controle-upc.md`
+8. `docs/prd-execucao-controle-upc.md`
+9. `docs/guia-tecnico-execucao-controle-upc.md`
+
 ## 2. Regra Principal Do Projeto
 
 A IN 01/2025 e a fonte principal do produto.
@@ -19,6 +49,8 @@ Ela define:
 - qual estrutura visual deve ser apresentada ao usuario;
 - quais campos, quadros, textos e documentos precisam ser gerados;
 - quais regras de prestacao de contas por UPC devem ser respeitadas.
+
+Como o Art. 31 da IN permite que o TCE-CE altere anexos, tabelas, quadros, modelos e demonstrativos por Portaria, a estrutura dos modelos da IN deve ser configuracao versionada no banco de dados. O frontend nao deve codificar cada modelo como tela fixa.
 
 O Manual SIM 2026 e apenas uma referencia tecnica dos arquivos CSV que o municipio ja possui.
 
@@ -103,13 +135,18 @@ Registro inicial do lote:
 
 - `POST /api/importacoes/lotes`
 
+Contexto real da prestacao:
+
+- `POST /api/contextos/abrir`: cria ou resolve municipio, exercicio, unidade gestora, UPC, gestao e prestacao de contas.
+- `GET /api/contextos/recentes`: lista prestacoes reais recentes para o dashboard.
+
 ### Responsabilidade Do Web
 
 O app web deve cuidar de:
 
 - pagina inicial moderna;
 - login futuro;
-- dashboard operacional com pendencias, importacoes recentes e metricas simples;
+- dashboard operacional moderno com pendencias, importacoes recentes, metricas, cards premium e leitura executiva;
 - tela simples de importacao SIM por municipio e exercicio, sem selecao manual de mes, com deteccao automatica da competencia;
 - analise do lote antes do registro definitivo;
 - selecao de municipio, exercicio, UPC, periodo e modelo;
@@ -178,8 +215,10 @@ As tabelas proprias do sistema devem representar:
 
 - UPC;
 - prestacao de contas;
+- versoes normativas da IN e Portarias;
 - modelos da IN;
-- campos dos modelos;
+- secoes, quadros, linhas, colunas e campos dos modelos;
+- classificacao dos campos como automatico, hibrido, manual, narrativo, anexo ou declaracao de inexistencia;
 - status de preenchimento;
 - anexos;
 - revisoes;
@@ -199,11 +238,31 @@ Cada informacao relevante deve guardar sua origem:
 
 Na importacao SIM, o usuario nao escolhe mes. Ele escolhe apenas municipio e exercicio. Os meses/competencias sao inferidos pelos arquivos enviados em pasta ou `.zip`.
 
-Para o Modelo 01, os valores editaveis ficam em `controle_upc.campo_modelo_valor`, e os textos oficiais permanecem bloqueados em `controle_upc.campo_modelo` com `texto_oficial = true`.
+Para o Modelo 01, os valores editaveis ficam em `controle_upc.campo_modelo_valor`, e os textos oficiais permanecem bloqueados em `controle_upc.campo_modelo` com `texto_oficial = true`. Essa estrutura e apenas a base inicial; ela deve evoluir para templates versionados conforme a ADR-001.
+
+No app web, o carregamento de templates versionados fica centralizado em:
+
+- `apps/web/src/lib/modelos/templates.ts`
+
+Esse modulo deve ser usado pelos proximos modelos da IN para evitar consulta hardcoded por pagina.
+
+O editor visual generico fica em:
+
+- `apps/web/src/components/modelos/TemplateEditorClient.tsx`
+
+As paginas especificas, como o Modelo 01, devem preferir wrappers pequenos que informam `templateCodigo` e titulo do modelo.
+
+Tambem existe rota dinamica para modelos:
+
+- `apps/web/src/app/modelos/[codigo]/page.tsx`
+
+Exemplo: `/modelos/modelo-02` carrega o template `modelo_02`.
 
 ## 6. MVP - Modelo 01
 
 O primeiro modulo completo sera o Modelo 01 - Rol de Responsaveis.
+
+O Modelo 01 nao deve ser tratado como tela fixa definitiva. Ele deve ser o primeiro caso real do renderizador generico de modelos da IN, baseado em template versionado no banco.
 
 O objetivo do MVP e validar o fluxo principal:
 
@@ -243,6 +302,18 @@ O objetivo do MVP e validar o fluxo principal:
 ## 7. Regras De Interface
 
 O frontend deve mostrar os modelos da IN, nao as tabelas do SIM.
+
+Direcao visual oficial da area logada:
+
+- seguir o layout Lumina Dashboard / Clean UI Interface Refinement;
+- sidebar clara, topbar branca e barra horizontal de contexto;
+- shell completo limitado a `1440px` e centralizado em monitores maiores;
+- cards com borda fina e sombras discretas;
+- permitir gradientes e acentos quando tiverem funcao, sem dominar a tela operacional;
+- manter a produtividade de ferramenta GED/Excel: tabelas densas, filtros, checklist da IN, anexos e acoes diretas;
+- nao copiar o GED antigo literalmente;
+- nao transformar a area logada em landing page decorativa;
+- cada tela principal deve passar por aprovacao visual do usuario antes de avancar para a proxima.
 
 Textos oficiais da IN nao devem ser editaveis.
 
@@ -338,9 +409,12 @@ Nenhum dado sugerido por IA deve substituir texto oficial da IN.
 - Gravacao em staging.
 - Relatorio de erros.
 
-### Fase 4 - Modelo 01
+### Fase 4 - Templates Versionados E Modelo 01
 
-- Tela do Modelo 01.
+- Evoluir `modelo_in` e `campo_modelo` para template versionado.
+- Criar versao normativa da IN 01/2025 atualizada pela Portaria 51/2026.
+- Migrar o Modelo 01 para a estrutura de template.
+- Criar renderizador generico de modelo.
 - Preenchimento automatico com `101`, `109`, `503`, `504`, `951`, `952` e `953`.
 - Edicao controlada.
 - Pendencias.
@@ -379,27 +453,33 @@ Nenhum dado sugerido por IA deve substituir texto oficial da IN.
 
 ## 11. Checklist De Aceite
 
-- [ ] O sistema usa a IN 01/2025 como fonte principal do produto.
-- [ ] O Manual SIM 2026 e usado apenas como referencia dos CSVs.
-- [ ] O frontend mostra modelos da IN, nao tabelas SIM.
-- [ ] A stack definida esta documentada.
-- [ ] A arquitetura `apps/web`, `apps/worker`, Supabase e jobs esta definida.
+- [x] O sistema usa a IN 01/2025 como fonte principal do produto.
+- [x] O Manual SIM 2026 e usado apenas como referencia dos CSVs.
+- [x] O frontend mostra modelos da IN, nao tabelas SIM.
+- [x] A stack definida esta documentada.
+- [x] A arquitetura `apps/web`, `apps/worker`, Supabase e jobs esta definida.
 - [ ] O MVP e o Modelo 01 completo.
-- [ ] A tabela `101` e fonte principal do gestor/dirigente maximo.
-- [ ] A tabela `109` e fonte de ordenador de despesa.
-- [ ] A importacao SIM usa apenas municipio e exercicio, inferindo as competencias pelos arquivos enviados.
-- [ ] O Modelo 01 carrega campos da IN e salva valores editaveis em `campo_modelo_valor`.
-- [ ] O lote gera job de processamento e preserva a camada bruta da importacao.
-- [ ] Os textos oficiais da IN ficam bloqueados.
+- [x] A tabela `101` esta definida como fonte principal do gestor/dirigente maximo.
+- [x] A tabela `109` esta definida como fonte de ordenador de despesa.
+- [x] A importacao SIM usa apenas municipio e exercicio, inferindo as competencias pelos arquivos enviados.
+- [x] O Modelo 01 possui estrutura de valores por template e prestacao.
+- [x] Os modelos da IN sao templates versionados no banco, conforme ADR-001.
+- [x] A tela do Modelo 01 possui base de renderizador generico.
+- [-] O lote gera job de processamento e preserva a camada bruta da importacao.
+- [-] Os textos oficiais da IN possuem regra de bloqueio; falta fechar a UX do Modelo 01.
 - [ ] Dados importados possuem origem rastreavel.
-- [ ] Anexos podem ser vinculados a modelos e campos/responsaveis.
+- [-] Anexos podem ser vinculados a modelos e campos; responsável ainda precisa ser concluído.
 - [ ] Exportacao PDF e Excel fazem parte do MVP.
 - [ ] OCR/LLM exige revisao humana antes de gravar.
+
+Checklist detalhado:
+
+- `docs/checklist-execucao-controle-upc.md`
 
 ## 12. Decisoes Em Aberto
 
 - Definir nome final do produto.
-- Definir identidade visual inicial.
+- Obter aprovação final da tela Prestação/Contexto.
 - Definir se o login entra no MVP ou na fase seguinte.
 - Definir primeiro municipio de teste.
 - Definir amostras reais de CSV para validar a importacao.

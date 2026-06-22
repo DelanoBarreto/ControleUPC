@@ -11,7 +11,7 @@ function requiredEnv(name: string): string {
 export function createSupabaseServerClient() {
   return createClient(
     requiredEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    process.env.SUPABASE_SECRET_KEY ?? requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
     {
       auth: {
         persistSession: false,

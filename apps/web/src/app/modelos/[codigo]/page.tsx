@@ -1,36 +1,23 @@
-﻿import { ArrowLeft, FileDown, FileSpreadsheet, Layers3, Upload } from "lucide-react";
-import Link from "next/link";
+import { TemplateEditorClient } from "@/components/modelos/TemplateEditorClient";
 import {
   carregarCamposTemplate,
   carregarFuncoesRol,
-  fallbackCamposModelo01,
-  fallbackFuncoesRol,
   type CampoModeloTemplate,
-  type FuncaoRolTemplate
+  type FuncaoRolTemplate,
+  fallbackFuncoesRol,
+  normalizarCodigoModelo,
+  tituloModeloFromCodigo
 } from "@/lib/modelos/templates";
-import { Modelo01EditorClient } from "./Modelo01EditorClient";
+import { ArrowLeft, FileDown, FileSpreadsheet, Layers3, Upload } from "lucide-react";
+import Link from "next/link";
 
-export type CampoModelo = CampoModeloTemplate;
-
-type FuncaoRol = FuncaoRolTemplate;
-
-type Modelo01Contexto = {
-  prestacaoContasId: string;
-  totalCampos: number;
-  totalCamposEditaveis: number;
-  totalCamposBloqueados: number;
-  totalFuncoes: number;
-};
-
-export type ValorCampoModelo = {
-  template_campo_id: string;
-  valor_texto: string | null;
-  valor_data: string | null;
-  valor_numero: number | null;
-  valor_booleano: boolean | null;
-  origem: string;
-  revisado: boolean;
-  observacao: string | null;
+type ModeloDinamicoPageProps = {
+  params: Promise<{
+    codigo: string;
+  }>;
+  searchParams?: Promise<{
+    prestacao_contas_id?: string;
+  }>;
 };
 
 function buildImportacoesHref(prestacaoContasId: string) {
@@ -39,28 +26,28 @@ function buildImportacoesHref(prestacaoContasId: string) {
   return `/importacoes${params.size ? `?${params.toString()}` : ""}`;
 }
 
-type Modelo01PageProps = {
-  searchParams?: Promise<{
-    prestacao_contas_id?: string;
-  }>;
-};
-
-export default async function Modelo01Page({ searchParams }: Modelo01PageProps) {
+export default async function ModeloDinamicoPage({ params, searchParams }: ModeloDinamicoPageProps) {
+  const { codigo: slug } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
+
+  const templateCodigo = normalizarCodigoModelo(slug);
+  const titulo = tituloModeloFromCodigo(templateCodigo);
   const prestacaoContasId = resolvedSearchParams?.prestacao_contas_id ?? "";
-  let campos: CampoModelo[] = fallbackCamposModelo01;
-  let funcoes: FuncaoRol[] = fallbackFuncoesRol;
+
+  let campos: CampoModeloTemplate[] = [];
+  let funcoes: FuncaoRolTemplate[] = fallbackFuncoesRol;
 
   try {
     [campos, funcoes] = await Promise.all([
-      carregarCamposTemplate("modelo_01", fallbackCamposModelo01),
+      carregarCamposTemplate(templateCodigo, []),
       carregarFuncoesRol(fallbackFuncoesRol)
     ]);
   } catch {
-    // MantÃ©m os dados de fallback quando o banco ainda nÃ£o estiver acessÃ­vel.
+    campos = [];
+    funcoes = fallbackFuncoesRol;
   }
 
-  const contexto: Modelo01Contexto = {
+  const contexto = {
     prestacaoContasId,
     totalCampos: campos.length,
     totalCamposEditaveis: campos.filter((campo) => campo.editavel).length,
@@ -82,14 +69,13 @@ export default async function Modelo01Page({ searchParams }: Modelo01PageProps) 
                     Modelo da IN
                   </span>
                   <span className="rounded-full border border-white/15 bg-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">
-                    Workspace ativo
+                    Template versionado
                   </span>
                 </div>
                 <div className="space-y-2">
-                  <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Modelo 01 - Rol de ResponsÃ¡veis</h1>
+                  <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">{titulo}</h1>
                   <p className="max-w-3xl text-sm leading-6 text-white/80 md:text-base">
-                    Workspace de preenchimento do modelo da IN: campos oficiais, valores editÃ¡veis, anexos obrigatÃ³rios
-                    e exportaÃ§Ã£o da prestaÃ§Ã£o selecionada.
+                    Workspace generico para modelos da IN, alimentado por template versionado no banco.
                   </p>
                 </div>
               </div>
@@ -100,7 +86,7 @@ export default async function Modelo01Page({ searchParams }: Modelo01PageProps) 
                   <p className="mt-1 text-2xl font-semibold text-white">{contexto.totalCampos}</p>
                 </div>
                 <div className="rounded-[20px] border border-white/15 bg-white/12 px-4 py-3 backdrop-blur">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">EditÃ¡veis</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">Editaveis</p>
                   <p className="mt-1 text-2xl font-semibold text-white">{contexto.totalCamposEditaveis}</p>
                 </div>
               </div>
@@ -112,14 +98,14 @@ export default async function Modelo01Page({ searchParams }: Modelo01PageProps) 
                 href="/dashboard"
               >
                 <ArrowLeft className="size-4 shrink-0" />
-                <span>Painel da prestaÃ§Ã£o</span>
+                <span>Painel da prestacao</span>
               </Link>
               <Link
                 className="inline-flex min-w-[190px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-[#101828] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 ring-1 ring-white/20 transition hover:-translate-y-0.5 hover:bg-[#1f2937]"
                 href={importacoesHref}
               >
                 <Upload className="size-4 shrink-0" />
-                <span className="whitespace-nowrap">Ir para importaÃ§Ãµes</span>
+                <span>Ir para importacoes</span>
               </Link>
             </div>
           </div>
@@ -128,10 +114,12 @@ export default async function Modelo01Page({ searchParams }: Modelo01PageProps) 
 
       <section className="mx-auto max-w-7xl px-6 py-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_340px]">
-          <Modelo01EditorClient
+          <TemplateEditorClient
             campos={campos}
             contexto={contexto}
             prestacaoContasIdInicial={prestacaoContasId}
+            templateCodigo={templateCodigo}
+            titulo={titulo}
             valores={[]}
           />
 
@@ -143,16 +131,16 @@ export default async function Modelo01Page({ searchParams }: Modelo01PageProps) 
                     <Layers3 className="size-5" />
                   </div>
                   <div>
-                    <h2 className="text-base font-semibold text-slate-950">Resumo da prestaÃ§Ã£o</h2>
-                    <p className="mt-1 text-sm text-slate-500">Estado atual do workspace e atalhos de operaÃ§Ã£o.</p>
+                    <h2 className="text-base font-semibold text-slate-950">Resumo do modelo</h2>
+                    <p className="mt-1 text-sm text-slate-500">Template `{templateCodigo}`.</p>
                   </div>
                 </div>
               </div>
               <div className="grid gap-3 p-5">
                 <div className="rounded-[18px] border border-slate-200 bg-[#f8fbff] px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">PrestaÃ§Ã£o</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Prestacao</p>
                   <p className="mt-1 break-all font-mono text-xs leading-5 font-medium text-slate-900">
-                    {prestacaoContasId || "Sem prestaÃ§Ã£o aberta"}
+                    {prestacaoContasId || "Sem prestacao aberta"}
                   </p>
                 </div>
                 <div className="grid grid-cols-3 gap-3 text-center">
@@ -162,11 +150,11 @@ export default async function Modelo01Page({ searchParams }: Modelo01PageProps) 
                   </div>
                   <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-3">
                     <p className="text-lg font-semibold text-slate-950">{contexto.totalCamposEditaveis}</p>
-                    <p className="text-[11px] uppercase tracking-wide text-slate-500">EditÃ¡veis</p>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500">Editaveis</p>
                   </div>
                   <div className="rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-3">
                     <p className="text-lg font-semibold text-slate-950">{contexto.totalFuncoes}</p>
-                    <p className="text-[11px] uppercase tracking-wide text-slate-500">FunÃ§Ãµes</p>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500">Funcoes</p>
                   </div>
                 </div>
               </div>
@@ -174,24 +162,7 @@ export default async function Modelo01Page({ searchParams }: Modelo01PageProps) 
 
             <section className="rounded-[28px] border border-white/70 bg-white shadow-[0_24px_80px_rgba(16,24,40,0.08)]">
               <div className="border-b border-slate-100 px-5 py-4">
-                <h2 className="text-base font-semibold text-slate-950">FunÃ§Ãµes exigidas</h2>
-              </div>
-              <div className="divide-y divide-slate-100">
-                {funcoes.map((funcao) => (
-                  <div className="px-5 py-4 text-sm" key={funcao.codigo}>
-                    <p className="font-medium text-slate-950">{funcao.nome}</p>
-                    <p className="mt-1 text-slate-500">CÃ³digo: {funcao.codigo}</p>
-                    <p className="mt-1 text-slate-500">
-                      {funcao.exige_anexo ? "Exige anexo" : "Sem anexo obrigatÃ³rio"}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-[28px] border border-white/70 bg-white shadow-[0_24px_80px_rgba(16,24,40,0.08)]">
-              <div className="border-b border-slate-100 px-5 py-4">
-                <h2 className="text-base font-semibold text-slate-950">ExportaÃ§Ã£o final</h2>
+                <h2 className="text-base font-semibold text-slate-950">Exportacao final</h2>
               </div>
               <div className="flex flex-col gap-3 p-5">
                 <button className="inline-flex items-center justify-center gap-2 rounded-full bg-[#101828] px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5">

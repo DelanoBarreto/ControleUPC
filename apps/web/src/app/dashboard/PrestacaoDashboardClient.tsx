@@ -1,536 +1,684 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  AlertTriangle,
-  ArrowRight,
-  BadgeCheck,
+  ArrowUpRight,
+  BarChart3,
   Building2,
   CalendarDays,
-  CheckCircle2,
+  ChevronRight,
+  CircleUserRound,
   ClipboardCheck,
-  FileArchive,
-  FileCheck2,
+  FileSpreadsheet,
   FileText,
   FolderOpen,
+  Landmark,
   Layers3,
   LayoutDashboard,
-  ListChecks,
-  PanelTop,
+  RefreshCw,
   Search,
+  Settings,
   Sparkles,
-  Upload
+  Upload,
+  UserRound
 } from "lucide-react";
 
-const modelos = [
+type ContextoRecente = {
+  municipio: string;
+  nomeMunicipio: string;
+  ano: string;
+  codigoUg: string;
+  nomeUg: string;
+  upc: string;
+  cpfGestor: string;
+  nomeGestor: string;
+  periodoInicio: string;
+  periodoFim: string;
+  prestacaoId: string;
+  status: string;
+  progresso: number;
+};
+
+type ChecklistItem = {
+  codigo: string;
+  titulo: string;
+  origem: string;
+  status: string;
+  pendencias: number;
+  href: string;
+  accent: "blue" | "yellow" | "violet" | "teal";
+};
+
+const menu = [
+  { key: "prestacao", label: "Prestação", href: "/dashboard", icon: LayoutDashboard },
+  { key: "modelos", label: "Modelos da IN", href: "/modelos/modelo-01", icon: Layers3 },
+  { key: "importacoes", label: "Importação SIM", href: "/importacoes", icon: Upload },
+  { key: "anexos", label: "Anexos", href: "/anexos", icon: FolderOpen },
+  { key: "pendencias", label: "Pendências", href: "/dashboard", icon: FileText },
+  { key: "relatorios", label: "Relatórios", href: "/dashboard", icon: BarChart3 },
+  { key: "admin", label: "Administração", href: "/dashboard", icon: Settings }
+] as const;
+
+const checklist: ChecklistItem[] = [
   {
     codigo: "Modelo 01",
-    nome: "Rol de Responsáveis",
+    titulo: "Rol de Responsáveis",
+    origem: "SIM + manual",
     status: "Em preenchimento",
-    progresso: 72,
     pendencias: 4,
-    href: "/modelos/modelo-01"
+    href: "/modelos/modelo-01",
+    accent: "blue"
   },
   {
     codigo: "Modelo 02",
-    nome: "Demonstrativo da gestão",
-    status: "Aguardando base",
-    progresso: 28,
+    titulo: "Relatório de Desempenho da Gestão",
+    origem: "Template IN",
+    status: "Pendente",
     pendencias: 7,
-    href: "/modelos/modelo-01"
-  },
-  {
-    codigo: "Modelo 03",
-    nome: "Declarações e evidências",
-    status: "Incompleto",
-    progresso: 45,
-    pendencias: 5,
-    href: "/modelos/modelo-01"
+    href: "/modelos/modelo-02",
+    accent: "violet"
   },
   {
     codigo: "Anexos",
-    nome: "Documentos obrigatórios",
-    status: "Revisão documental",
-    progresso: 38,
+    titulo: "Documentos obrigatórios e comprovantes",
+    origem: "Upload",
+    status: "Pendente",
     pendencias: 9,
-    href: "/modelos/modelo-01"
+    href: "/anexos",
+    accent: "yellow"
+  },
+  {
+    codigo: "Exportação",
+    titulo: "Dossiê final PDF e Excel",
+    origem: "Sistema",
+    status: "Bloqueado",
+    pendencias: 1,
+    href: "/dashboard",
+    accent: "teal"
   }
 ];
 
-const pendencias = [
-  "Modelo 01: informar responsável pelo controle interno.",
-  "Modelo 01: anexar portaria de nomeação do dirigente máximo.",
-  "Anexos: falta documento de suporte da contabilidade.",
-  "Exportação: validar textos oficiais antes de gerar PDF final."
-];
-
-const arquivosImportados = [
-  { nome: "Balancete de receita", origem: "SIM", status: "Importado" },
-  { nome: "Empenhos e liquidações", origem: "SIM", status: "Com avisos" },
-  { nome: "Cadastro de responsáveis", origem: "Manual", status: "Pendente" }
-];
-
-const indicadores = [
-  { label: "Modelos da IN", valor: "4", nota: "em acompanhamento" },
-  { label: "Preenchimento", valor: "58%", nota: "média da prestação" },
-  { label: "Pendências", valor: "25", nota: "antes do envio" },
-  { label: "Arquivos", valor: "12", nota: "vinculados ao processo" }
-];
-
-const contextosRecentes = [
-  {
-    municipio: "014",
-    nome: "Prefeitura Municipal",
-    ano: "2026",
-    upc: "Prefeitura Municipal",
-    prestacaoId: "00000000-0000-0000-0000-000000000001",
-    status: "Em preenchimento",
-    progresso: 58
-  },
-  {
-    municipio: "014",
-    nome: "Fundo Municipal de Saúde",
-    ano: "2026",
-    upc: "Fundo Municipal de Saúde",
-    prestacaoId: "00000000-0000-0000-0000-000000000002",
-    status: "Aguardando anexos",
-    progresso: 41
-  },
-  {
-    municipio: "014",
-    nome: "Câmara Municipal",
-    ano: "2025",
-    upc: "Câmara Municipal",
-    prestacaoId: "00000000-0000-0000-0000-000000000003",
-    status: "Revisão final",
-    progresso: 86
-  }
-];
-
-function buildModeloHref(baseHref: string, prestacaoId: string) {
+function buildHref(baseHref: string, prestacaoId: string) {
   const params = new URLSearchParams();
   if (prestacaoId.trim()) params.set("prestacao_contas_id", prestacaoId.trim());
   return `${baseHref}${params.size ? `?${params.toString()}` : ""}`;
 }
 
-function buildImportacoesHref(prestacaoId: string, municipio: string, ano: string) {
-  const params = new URLSearchParams();
-  if (prestacaoId.trim()) params.set("prestacao_contas_id", prestacaoId.trim());
-  if (municipio.trim()) params.set("codigo_municipio", municipio.trim());
-  if (ano.trim()) params.set("exercicio", ano.trim());
-  return `/importacoes${params.size ? `?${params.toString()}` : ""}`;
+function statusTone(status: string): "success" | "warning" | "danger" | "info" {
+  const normalized = status.toLowerCase();
+  if (normalized.includes("concl") || normalized.includes("completo")) return "success";
+  if (normalized.includes("bloque") || normalized.includes("erro")) return "danger";
+  if (normalized.includes("pend") || normalized.includes("preench")) return "warning";
+  return "info";
 }
 
 export function PrestacaoDashboardClient() {
+  const [nomeMunicipio, setNomeMunicipio] = useState("Prefeitura Municipal");
   const [municipio, setMunicipio] = useState("014");
   const [ano, setAno] = useState("2026");
+  const [codigoUg, setCodigoUg] = useState("001");
+  const [nomeUg, setNomeUg] = useState("Prefeitura Municipal");
   const [upc, setUpc] = useState("Prefeitura Municipal");
-  const [prestacaoId, setPrestacaoId] = useState("00000000-0000-0000-0000-000000000001");
-  const [painelAberto, setPainelAberto] = useState(false);
+  const [cpfGestor, setCpfGestor] = useState("00000000000");
+  const [nomeGestor, setNomeGestor] = useState("Gestor da Pasta");
+  const [periodoInicio, setPeriodoInicio] = useState("2026-01-01");
+  const [periodoFim, setPeriodoFim] = useState("2026-12-31");
+  const [prestacaoId, setPrestacaoId] = useState("");
+  const [salvandoContexto, setSalvandoContexto] = useState(false);
+  const [statusContexto, setStatusContexto] = useState("Selecione ou abra um contexto para iniciar.");
+  const [contextosRecentes, setContextosRecentes] = useState<ContextoRecente[]>([]);
+  const [carregandoRecentes, setCarregandoRecentes] = useState(true);
+  const [editandoContexto, setEditandoContexto] = useState(false);
 
-  function selecionarContexto(contexto: (typeof contextosRecentes)[number]) {
-    setMunicipio(contexto.municipio);
-    setAno(contexto.ano);
-    setUpc(contexto.upc);
-    setPrestacaoId(contexto.prestacaoId);
-    setPainelAberto(false);
+  useEffect(() => {
+    void carregarRecentes();
+  }, []);
+
+  async function carregarRecentes() {
+    setCarregandoRecentes(true);
+    try {
+      const response = await fetch("/api/contextos/recentes");
+      if (!response.ok) throw new Error("Falha ao carregar recentes.");
+      const data = (await response.json()) as { contextos: ContextoRecente[] };
+      setContextosRecentes(data.contextos);
+    } catch {
+      setStatusContexto("Não foi possível carregar prestações recentes.");
+    } finally {
+      setCarregandoRecentes(false);
+    }
   }
 
-  const importacoesHref = buildImportacoesHref(prestacaoId, municipio, ano);
+  function selecionarContexto(contexto: ContextoRecente) {
+    setMunicipio(contexto.municipio);
+    setNomeMunicipio(contexto.nomeMunicipio);
+    setAno(contexto.ano);
+    setCodigoUg(contexto.codigoUg);
+    setNomeUg(contexto.nomeUg);
+    setUpc(contexto.upc);
+    setCpfGestor(contexto.cpfGestor);
+    setNomeGestor(contexto.nomeGestor);
+    setPeriodoInicio(contexto.periodoInicio);
+    setPeriodoFim(contexto.periodoFim);
+    setPrestacaoId(contexto.prestacaoId);
+    setStatusContexto("Contexto recente selecionado.");
+    setEditandoContexto(false);
+  }
+
+  async function abrirContexto() {
+    setSalvandoContexto(true);
+    setStatusContexto("Abrindo contexto...");
+
+    try {
+      const response = await fetch("/api/contextos/abrir", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          codigo_municipio: municipio,
+          nome_municipio: nomeMunicipio,
+          exercicio: Number(ano),
+          codigo_ug: codigoUg,
+          nome_ug: nomeUg,
+          nome_upc: upc,
+          cpf_gestor: cpfGestor,
+          nome_gestor: nomeGestor,
+          periodo_inicio: periodoInicio,
+          periodo_fim: periodoFim,
+          tipo_prestacao: "anual"
+        })
+      });
+
+      if (!response.ok) throw new Error("Falha ao abrir contexto.");
+
+      const data = (await response.json()) as {
+        prestacao_contas: { id: string };
+        municipio: { codigo_municipio: string; nome: string };
+        upc: { nome: string };
+      };
+
+      setPrestacaoId(data.prestacao_contas.id);
+      setMunicipio(data.municipio.codigo_municipio);
+      setNomeMunicipio(data.municipio.nome);
+      setUpc(data.upc.nome);
+      setStatusContexto("Contexto aberto. Checklist liberado.");
+      setEditandoContexto(false);
+      await carregarRecentes();
+    } catch {
+      setStatusContexto("Não foi possível abrir o contexto.");
+    } finally {
+      setSalvandoContexto(false);
+    }
+  }
+
+  const progresso = prestacaoId ? 38 : 12;
+  const pendencias = checklist.reduce((total, item) => total + item.pendencias, 0);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#edf2ff_0%,#f7f9fc_32%,#eef4f1_100%)] text-[#101828]">
-      <div className="mx-auto grid max-w-7xl gap-6 px-6 py-6 lg:grid-cols-[300px_1fr]">
-        <aside className="sticky top-6 h-fit rounded-[28px] border border-white/70 bg-white/90 p-5 shadow-[0_24px_80px_rgba(16,24,40,0.09)] backdrop-blur">
-          <div className="flex items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#2b6dff_0%,#9b49ff_100%)] text-white">
-              <PanelTop className="size-5" />
+    <div className="min-h-screen bg-[#eef2f6] text-[#191c1e]">
+      <div className="mx-auto grid min-h-screen w-full max-w-[1440px] bg-[#f8fafc] shadow-[0_0_32px_rgba(30,41,59,.08)] lg:grid-cols-[234px_minmax(0,1fr)]">
+        <Sidebar progresso={progresso} />
+
+        <div className="min-w-0">
+          <Topbar municipio={nomeMunicipio} ano={ano} upc={upc} />
+
+          <main className="px-4 py-5 sm:px-6">
+            <ContextBar
+              ano={ano}
+              codigoUg={codigoUg}
+              municipio={municipio}
+              nomeGestor={nomeGestor}
+              nomeMunicipio={nomeMunicipio}
+              periodoFim={periodoFim}
+              periodoInicio={periodoInicio}
+              upc={upc}
+              onEdit={() => setEditandoContexto((value) => !value)}
+            />
+
+            {editandoContexto ? (
+              <ContextEditor
+                ano={ano}
+                codigoUg={codigoUg}
+                cpfGestor={cpfGestor}
+                nomeGestor={nomeGestor}
+                nomeMunicipio={nomeMunicipio}
+                nomeUg={nomeUg}
+                municipio={municipio}
+                periodoFim={periodoFim}
+                periodoInicio={periodoInicio}
+                prestacaoId={prestacaoId}
+                salvando={salvandoContexto}
+                status={statusContexto}
+                upc={upc}
+                onAbrir={() => void abrirContexto()}
+                onAtualizar={() => void carregarRecentes()}
+                setters={{
+                  ano: setAno,
+                  codigoUg: setCodigoUg,
+                  cpfGestor: setCpfGestor,
+                  municipio: setMunicipio,
+                  nomeGestor: setNomeGestor,
+                  nomeMunicipio: setNomeMunicipio,
+                  nomeUg: setNomeUg,
+                  periodoFim: setPeriodoFim,
+                  periodoInicio: setPeriodoInicio,
+                  prestacaoId: setPrestacaoId,
+                  upc: setUpc
+                }}
+              />
+            ) : null}
+
+            <div className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_288px]">
+              <ChecklistPanel pendencias={pendencias} prestacaoId={prestacaoId} />
+
+              <aside className="grid gap-5">
+                <ProgressCard progresso={progresso} prestacaoId={prestacaoId} />
+                <RecentCard
+                  carregando={carregandoRecentes}
+                  contextos={contextosRecentes}
+                  onAtualizar={() => void carregarRecentes()}
+                  onSelecionar={selecionarContexto}
+                />
+                <p className="px-1 text-[10px] font-bold uppercase tracking-[.12em] text-[#64748b]">Acessos rápidos</p>
+                <QuickAction
+                  href={buildHref("/modelos/modelo-01", prestacaoId)}
+                  icon={<FileText className="size-5" />}
+                  label="Modelo 01"
+                  text="Abrir a planilha controlada do Rol de Responsáveis."
+                  tone="blue"
+                />
+                <QuickAction
+                  href={buildHref("/importacoes", prestacaoId)}
+                  icon={<Upload className="size-5" />}
+                  label="Importação SIM"
+                  text="Enviar zip ou pasta do exercício sem selecionar mês."
+                  tone="violet"
+                />
+                <QuickAction
+                  href={buildHref("/anexos", prestacaoId)}
+                  icon={<FolderOpen className="size-5" />}
+                  label="Anexos"
+                  text="Vincular documentos ao modelo, campo ou responsável."
+                  tone="yellow"
+                />
+              </aside>
             </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6b7280]">Controle UPC</p>
-              <h1 className="text-lg font-semibold">Prestação da IN</h1>
-            </div>
-          </div>
-
-          <nav className="mt-8 space-y-2">
-            {[
-              { label: "Prestação", href: "/dashboard", icon: LayoutDashboard, active: true },
-              { label: "Importações", href: importacoesHref, icon: Upload, active: false },
-              { label: "Modelo 01", href: buildModeloHref("/modelos/modelo-01", prestacaoId), icon: Layers3, active: false },
-              { label: "Landing", href: "/", icon: Sparkles, active: false }
-            ].map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-medium transition ${
-                    item.active
-                      ? "bg-[linear-gradient(135deg,rgba(43,109,255,0.12)_0%,rgba(155,73,255,0.12)_100%)] text-[#2545d7]"
-                      : "text-[#475467] hover:bg-slate-50"
-                  }`}
-                  href={item.href}
-                  key={item.label}
-                >
-                  <span className="flex items-center gap-3">
-                    <Icon className="size-4" />
-                    {item.label}
-                  </span>
-                  <ArrowRight className="size-4 opacity-50" />
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="mt-8 rounded-[24px] bg-[linear-gradient(180deg,#ffcf8a_0%,#ffa24b_100%)] p-5 text-[#4c2d03] shadow-[0_20px_50px_rgba(255,162,75,0.25)]">
-            <div className="flex items-center gap-2">
-              <div className="flex size-10 items-center justify-center rounded-2xl bg-white/70">
-                <ListChecks className="size-5" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7a3e00]">IN 01/2025</p>
-                <h2 className="text-base font-semibold">Envio dos modelos</h2>
-              </div>
-            </div>
-            <p className="mt-4 text-sm leading-6 text-[#5e3700]">
-              A tela principal acompanha os modelos exigidos, pendências, anexos e prontidão para exportação.
-            </p>
-          </div>
-        </aside>
-
-        <section className="space-y-6">
-          <section className="relative overflow-hidden rounded-[32px] border border-white/60 bg-[linear-gradient(135deg,#233876_0%,#2545d7_52%,#0f766e_100%)] px-6 py-6 text-white shadow-[0_28px_90px_rgba(37,69,215,0.22)] md:px-8 md:py-8">
-            <div className="relative flex flex-col gap-6">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/75">
-                    {painelAberto ? "Painel principal" : "Abertura da prestação"}
-                  </p>
-                  <h2 className="text-3xl font-semibold md:text-4xl">
-                    {painelAberto ? "Prestação de contas da UPC" : "Selecione município, exercício e UPC"}
-                  </h2>
-                  <p className="max-w-3xl text-sm leading-6 text-white/80 md:text-base">
-                    {painelAberto
-                      ? "Acompanhe os modelos da IN, campos incompletos, anexos exigidos, arquivos vinculados e pendências antes do envio."
-                      : "Abra o contexto correto da prestação antes de trabalhar nos modelos. A importação de arquivos SIM fica em módulo próprio no menu Importações."}
-                  </p>
-                </div>
-
-                {painelAberto ? (
-                  <div className="flex flex-wrap gap-3">
-                    <Link
-                      className="inline-flex min-w-[190px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-[#101828] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-black/20 ring-1 ring-white/20 transition hover:-translate-y-0.5"
-                      href={buildModeloHref("/modelos/modelo-01", prestacaoId)}
-                    >
-                      <Layers3 className="size-4 shrink-0" />
-                      <span>Abrir Modelo 01</span>
-                    </Link>
-                    <Link
-                      className="inline-flex min-w-[190px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#2545d7] shadow-lg shadow-black/10 ring-1 ring-white/30 transition hover:-translate-y-0.5 hover:bg-[#f8fbff]"
-                      href={importacoesHref}
-                    >
-                      <Upload className="size-4 shrink-0" />
-                      <span>Ir para importações</span>
-                    </Link>
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-3">
-                <label className="block rounded-[20px] bg-white/12 p-4 backdrop-blur">
-                  <span className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
-                    <Building2 className="size-4" />
-                    Município
-                  </span>
-                  <input
-                    className="w-full bg-transparent text-lg font-semibold outline-none placeholder:text-white/40"
-                    value={municipio}
-                    onChange={(event) => setMunicipio(event.target.value)}
-                  />
-                </label>
-                <label className="block rounded-[20px] bg-white/12 p-4 backdrop-blur">
-                  <span className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
-                    <CalendarDays className="size-4" />
-                    Exercício
-                  </span>
-                  <input
-                    className="w-full bg-transparent text-lg font-semibold outline-none placeholder:text-white/40"
-                    value={ano}
-                    onChange={(event) => setAno(event.target.value)}
-                  />
-                </label>
-                <label className="block rounded-[20px] bg-white/12 p-4 backdrop-blur">
-                  <span className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
-                    <FolderOpen className="size-4" />
-                    UPC
-                  </span>
-                  <input
-                    className="w-full bg-transparent text-lg font-semibold outline-none placeholder:text-white/40"
-                    value={upc}
-                    onChange={(event) => setUpc(event.target.value)}
-                  />
-                </label>
-              </div>
-
-              <div className="flex flex-col gap-3 md:flex-row md:items-end">
-                <label className="block flex-1">
-                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
-                    Prestação de contas ID
-                  </span>
-                  <input
-                    className="w-full rounded-full border border-white/15 bg-white px-5 py-3 font-mono text-xs text-slate-800 outline-none"
-                    value={prestacaoId}
-                    onChange={(event) => setPrestacaoId(event.target.value)}
-                  />
-                </label>
-                <button
-                  className="inline-flex min-w-[190px] items-center justify-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#2545d7] shadow-lg shadow-black/10 transition hover:-translate-y-0.5"
-                  onClick={() => setPainelAberto(true)}
-                  type="button"
-                >
-                  <ClipboardCheck className="size-4" />
-                  Carregar painel
-                </button>
-              </div>
-            </div>
-          </section>
-
-          {painelAberto ? (
-            <>
-              <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {indicadores.map((item) => (
-                  <article
-                    className="rounded-[24px] border border-white/70 bg-white p-5 shadow-[0_18px_50px_rgba(20,32,30,0.06)]"
-                    key={item.label}
-                  >
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{item.label}</p>
-                    <strong className="mt-4 block text-4xl font-semibold text-slate-950">{item.valor}</strong>
-                    <p className="mt-3 text-sm leading-6 text-slate-500">{item.nota}</p>
-                  </article>
-                ))}
-              </section>
-
-              <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-                <article className="rounded-[28px] border border-white/70 bg-white shadow-[0_24px_80px_rgba(16,24,40,0.08)]">
-                  <div className="border-b border-slate-100 px-6 py-5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(43,109,255,0.12)_0%,rgba(15,118,110,0.12)_100%)] text-[#2545d7]">
-                        <FileText className="size-5" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-slate-950">Modelos da IN</h3>
-                        <p className="text-sm text-slate-500">Preenchidos, incompletos e pendentes para envio.</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 p-5 md:grid-cols-2">
-                    {modelos.map((modelo) => (
-                      <Link
-                        className="rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-4 transition hover:-translate-y-0.5 hover:border-[#cfe0ff]"
-                        href={buildModeloHref(modelo.href, prestacaoId)}
-                        key={modelo.codigo}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#2545d7]">
-                              {modelo.codigo}
-                            </p>
-                            <h4 className="mt-2 text-base font-semibold text-slate-950">{modelo.nome}</h4>
-                            <p className="mt-1 text-sm text-slate-500">{modelo.status}</p>
-                          </div>
-                          <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
-                            {modelo.pendencias}
-                          </span>
-                        </div>
-                        <div className="mt-5 h-2 rounded-full bg-slate-100">
-                          <div
-                            className="h-2 rounded-full bg-[linear-gradient(135deg,#2b6dff_0%,#0f766e_100%)]"
-                            style={{ width: `${modelo.progresso}%` }}
-                          />
-                        </div>
-                        <div className="mt-3 flex items-center justify-between text-sm">
-                          <span className="text-slate-500">{modelo.progresso}% preenchido</span>
-                          <span className="font-semibold text-[#2545d7]">Abrir</span>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </article>
-
-                <article className="rounded-[28px] border border-white/70 bg-white shadow-[0_24px_80px_rgba(16,24,40,0.08)]">
-                  <div className="border-b border-slate-100 px-6 py-5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-11 items-center justify-center rounded-2xl bg-[#fff7ed] text-[#c2410c]">
-                        <AlertTriangle className="size-5" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-slate-950">Pendências para envio</h3>
-                        <p className="text-sm text-slate-500">Itens que bloqueiam a entrega dos modelos.</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="divide-y divide-slate-100">
-                    {pendencias.map((item) => (
-                      <div className="flex gap-3 px-6 py-4" key={item}>
-                        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />
-                        <p className="text-sm leading-6 text-slate-600">{item}</p>
-                      </div>
-                    ))}
-                  </div>
-                </article>
-              </section>
-
-              <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-                <article className="rounded-[28px] border border-white/70 bg-white shadow-[0_24px_80px_rgba(16,24,40,0.08)]">
-                  <div className="border-b border-slate-100 px-6 py-5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-11 items-center justify-center rounded-2xl bg-[#ecfeff] text-[#0e7490]">
-                        <FileArchive className="size-5" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-slate-950">Arquivos vinculados</h3>
-                        <p className="text-sm text-slate-500">Bases importadas e documentos usados pelos modelos.</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-3 p-5">
-                    {arquivosImportados.map((arquivo) => (
-                      <div
-                        className="flex items-center justify-between gap-4 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3"
-                        key={arquivo.nome}
-                      >
-                        <div className="flex items-center gap-3">
-                          <FileCheck2 className="size-4 text-[#0f766e]" />
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">{arquivo.nome}</p>
-                            <p className="text-xs text-slate-500">{arquivo.origem}</p>
-                          </div>
-                        </div>
-                        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-                          {arquivo.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </article>
-
-                <article className="rounded-[28px] border border-white/70 bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fd_100%)] p-6 shadow-[0_24px_80px_rgba(16,24,40,0.08)]">
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-11 items-center justify-center rounded-2xl bg-[#edf6f3] text-[#0f766e]">
-                      <BadgeCheck className="size-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-slate-950">Dinâmica do preenchimento</h3>
-                      <p className="text-sm text-slate-500">Ordem recomendada para atender a IN.</p>
-                    </div>
-                  </div>
-                  <ol className="mt-6 grid gap-3 md:grid-cols-2">
-                    {[
-                      "Conferir modelos exigidos",
-                      "Preencher campos incompletos",
-                      "Anexar documentos obrigatórios",
-                      "Gerar PDF e Excel final"
-                    ].map((item, index) => (
-                      <li className="flex items-center gap-3 rounded-[18px] border border-slate-200 bg-white px-4 py-3" key={item}>
-                        <span className="flex size-8 items-center justify-center rounded-full bg-[linear-gradient(135deg,#2b6dff_0%,#0f766e_100%)] text-sm font-semibold text-white">
-                          {index + 1}
-                        </span>
-                        <span className="text-sm text-slate-700">{item}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </article>
-              </section>
-            </>
-          ) : (
-            <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-              <article className="rounded-[28px] border border-white/70 bg-white p-6 shadow-[0_24px_80px_rgba(16,24,40,0.08)]">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(43,109,255,0.12)_0%,rgba(15,118,110,0.12)_100%)] text-[#2545d7]">
-                    <Search className="size-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold text-slate-950">Prestações recentes</h3>
-                    <p className="mt-1 text-sm leading-6 text-slate-600">
-                      Escolha um contexto já iniciado ou use os campos acima para abrir outra prestação.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-6 grid gap-3">
-                  {contextosRecentes.map((contexto) => (
-                    <button
-                      className={`w-full rounded-[20px] border px-4 py-4 text-left transition hover:-translate-y-0.5 hover:border-[#cfe0ff] hover:bg-[#f8fbff] ${
-                        prestacaoId === contexto.prestacaoId
-                          ? "border-[#cfe0ff] bg-[#f8fbff]"
-                          : "border-slate-200 bg-white"
-                      }`}
-                      key={contexto.prestacaoId}
-                      onClick={() => selecionarContexto(contexto)}
-                      type="button"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-950">{contexto.nome}</p>
-                          <p className="mt-1 text-sm text-slate-500">
-                            Município {contexto.municipio} · Exercício {contexto.ano}
-                          </p>
-                        </div>
-                        <span className="rounded-full bg-[#edf6f3] px-3 py-1 text-xs font-semibold text-[#0f766e]">
-                          {contexto.status}
-                        </span>
-                      </div>
-                      <div className="mt-4 h-2 rounded-full bg-slate-100">
-                        <div
-                          className="h-2 rounded-full bg-[linear-gradient(135deg,#2b6dff_0%,#0f766e_100%)]"
-                          style={{ width: `${contexto.progresso}%` }}
-                        />
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </article>
-
-              <article className="rounded-[28px] border border-white/70 bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fd_100%)] p-6 shadow-[0_24px_80px_rgba(16,24,40,0.08)]">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-[#edf6f3] text-[#0f766e]">
-                    <ClipboardCheck className="size-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold text-slate-950">Ao carregar o painel</h3>
-                    <p className="mt-1 text-sm leading-6 text-slate-600">
-                      A tela muda para o acompanhamento dos modelos da IN, com pendências, anexos e arquivos vinculados.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-6 grid gap-3">
-                  {[
-                    "Modelos preenchidos e incompletos",
-                    "Pendências que bloqueiam o envio",
-                    "Arquivos importados e anexos vinculados",
-                    "Acesso direto ao Modelo 01 da prestação"
-                  ].map((item) => (
-                    <div className="flex items-center gap-3 rounded-[18px] border border-slate-200 bg-white px-4 py-3" key={item}>
-                      <CheckCircle2 className="size-4 shrink-0 text-[#0f766e]" />
-                      <span className="text-sm text-slate-700">{item}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#101828] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-300 transition hover:-translate-y-0.5"
-                  onClick={() => setPainelAberto(true)}
-                  type="button"
-                >
-                  <ClipboardCheck className="size-4" />
-                  Carregar painel da prestação
-                </button>
-              </article>
-            </section>
-          )}
-        </section>
+          </main>
+        </div>
       </div>
-    </main>
+    </div>
   );
+}
+
+function Sidebar({ progresso }: { progresso: number }) {
+  return (
+    <aside className="sticky top-0 hidden h-screen flex-col border-r border-[#e2e8f0] bg-white lg:flex">
+      <div className="flex h-16 items-center gap-3 border-b border-[#edf0f4] px-5">
+        <div className="grid size-9 place-items-center rounded-lg bg-[linear-gradient(135deg,#dce8ff,#e4ddff)] text-sm font-bold text-[#102a52]">
+          UPC
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-[.08em] text-[#475569]">Controle</p>
+          <h1 className="text-lg font-bold leading-5">Prestação da IN</h1>
+        </div>
+      </div>
+
+      <nav className="flex-1 space-y-1 px-3 py-5">
+        {menu.map((item) => {
+          const Icon = item.icon;
+          const active = item.key === "prestacao";
+          return (
+            <Link
+              className={`relative flex h-11 items-center gap-3 rounded-lg px-4 text-sm transition ${
+                active ? "font-bold text-[#123f66]" : "text-[#5f6368] hover:bg-[#f4f7fa] hover:text-[#1e293b]"
+              }`}
+              href={item.href}
+              key={item.key}
+            >
+              {active ? <span className="absolute -left-3 h-9 w-[3px] rounded-r bg-[#0058be]" /> : null}
+              <Icon className="size-[18px]" strokeWidth={active ? 2.2 : 1.7} />
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="m-4 rounded-xl border border-[#e2e8f0] bg-white p-3 shadow-[0_4px_12px_rgba(30,41,59,.04)]">
+        <div className="flex items-center justify-between">
+          <span className="rounded border border-[#dbe2ea] bg-[#f8fafc] px-2 py-1 text-[10px] font-bold">IN 01/2025</span>
+          <Sparkles className="size-4 text-[#475569]" />
+        </div>
+        <p className="mt-3 text-xs font-medium leading-5">Trabalhe por contexto: UPC, modelos, anexos e pacote final.</p>
+        <div className="mt-3 h-1.5 rounded-full bg-[#e5e7eb]">
+          <div className="h-full rounded-full bg-[#334155]" style={{ width: `${progresso}%` }} />
+        </div>
+        <p className="mt-2 text-[10px] text-[#64748b]">{progresso}% do fluxo inicial preparado</p>
+      </div>
+
+      <div className="px-5 pb-4">
+        <div className="grid size-8 place-items-center rounded-full bg-[#4b5563] text-xs font-bold text-white">N</div>
+      </div>
+    </aside>
+  );
+}
+
+function Topbar({ municipio, ano, upc }: { municipio: string; ano: string; upc: string }) {
+  return (
+    <header className="flex min-h-16 items-center justify-between gap-4 border-b border-[#e2e8f0] bg-white px-4 sm:px-6">
+      <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-[.08em] text-[#475569]">Workspace</p>
+        <p className="truncate text-sm font-bold">{municipio} / {ano} / {upc}</p>
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="hidden h-9 w-64 items-center gap-2 rounded-full bg-[#f1f3f6] px-4 text-sm text-[#7b7f87] md:flex">
+          <Search className="size-4" />
+          <span className="truncate">Buscar modelo, anexo ou pendência</span>
+        </div>
+        <div className="flex h-9 items-center gap-2 rounded-full bg-[#075aa9] px-4 text-sm font-medium text-white shadow-sm">
+          <span className="size-2 rounded-full bg-[#52c77a]" />
+          Administrador
+        </div>
+        <div className="grid size-9 place-items-center rounded-full bg-[#45484d] text-xs font-bold text-white">N</div>
+      </div>
+    </header>
+  );
+}
+
+type ContextBarProps = {
+  municipio: string;
+  nomeMunicipio: string;
+  ano: string;
+  upc: string;
+  codigoUg: string;
+  nomeGestor: string;
+  periodoInicio: string;
+  periodoFim: string;
+  onEdit: () => void;
+};
+
+function ContextBar(props: ContextBarProps) {
+  return (
+    <section className="flex flex-col gap-4 rounded-xl border border-[#78909c] bg-white px-4 py-3 shadow-[0_4px_12px_rgba(30,41,59,.07)] xl:flex-row xl:items-center xl:justify-between">
+      <div className="grid flex-1 gap-x-6 gap-y-2 sm:grid-cols-2 xl:grid-cols-[1.1fr_.75fr_1.1fr_1.35fr]">
+        <ContextMeta icon={<Building2 />} label="Município" value={`${props.municipio} - ${props.nomeMunicipio}`} />
+        <ContextMeta icon={<CalendarDays />} label="Exercício" value={props.ano} />
+        <ContextMeta icon={<Landmark />} label="UPC / UG" value={`${props.upc} (${props.codigoUg})`} />
+        <ContextMeta
+          icon={<UserRound />}
+          label={`Gestor (${formatDateShort(props.periodoInicio)} a ${formatDateShort(props.periodoFim)})`}
+          value={props.nomeGestor}
+        />
+      </div>
+      <div className="flex shrink-0 flex-wrap gap-2 xl:justify-end">
+        <button className="context-button" onClick={props.onEdit} type="button">Trocar UPC</button>
+        <button className="context-button" onClick={props.onEdit} type="button">Trocar Município</button>
+      </div>
+    </section>
+  );
+}
+
+function ContextMeta({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3 border-[#e5e7eb] xl:border-r xl:pr-5 xl:last:border-r-0">
+      <span className="text-[#123f66] [&>svg]:size-4">{icon}</span>
+      <span className="min-w-0">
+        <span className="block text-[9px] uppercase tracking-[.06em] text-[#525861]">{label}</span>
+        <span className="block truncate text-xs font-medium text-[#202327]">{value}</span>
+      </span>
+    </div>
+  );
+}
+
+type Setters = Record<
+  "ano" | "codigoUg" | "cpfGestor" | "municipio" | "nomeGestor" | "nomeMunicipio" | "nomeUg" | "periodoFim" | "periodoInicio" | "prestacaoId" | "upc",
+  (value: string) => void
+>;
+
+type ContextEditorProps = {
+  ano: string;
+  codigoUg: string;
+  cpfGestor: string;
+  municipio: string;
+  nomeGestor: string;
+  nomeMunicipio: string;
+  nomeUg: string;
+  periodoFim: string;
+  periodoInicio: string;
+  prestacaoId: string;
+  salvando: boolean;
+  status: string;
+  upc: string;
+  setters: Setters;
+  onAbrir: () => void;
+  onAtualizar: () => void;
+};
+
+function ContextEditor(props: ContextEditorProps) {
+  const fields: Array<[string, string, keyof Setters, string?]> = [
+    ["Município", props.municipio, "municipio"],
+    ["Nome do município", props.nomeMunicipio, "nomeMunicipio"],
+    ["Exercício", props.ano, "ano"],
+    ["UPC", props.upc, "upc"],
+    ["Código da UG", props.codigoUg, "codigoUg"],
+    ["Nome da UG", props.nomeUg, "nomeUg"],
+    ["CPF do gestor", props.cpfGestor, "cpfGestor"],
+    ["Nome do gestor", props.nomeGestor, "nomeGestor"],
+    ["Início da gestão", props.periodoInicio, "periodoInicio", "date"],
+    ["Fim da gestão", props.periodoFim, "periodoFim", "date"],
+    ["Prestação de contas ID", props.prestacaoId, "prestacaoId"]
+  ];
+
+  return (
+    <section className="mt-3 rounded-xl border border-[#dbe2ea] bg-white p-4 shadow-[0_4px_12px_rgba(30,41,59,.04)]">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {fields.map(([label, value, setter, type]) => (
+          <label className="block" key={setter}>
+            <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[.06em] text-[#64748b]">{label}</span>
+            <input
+              className="h-10 w-full rounded-lg border border-[#dce2e8] bg-white px-3 text-sm outline-none transition focus:border-[#0058be] focus:ring-2 focus:ring-[#0058be]/15"
+              onChange={(event) => props.setters[setter](event.target.value)}
+              type={type ?? "text"}
+              value={value}
+            />
+          </label>
+        ))}
+      </div>
+      <div className="mt-4 flex flex-col gap-3 border-t border-[#edf0f3] pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-[#64748b]">{props.status}</p>
+        <div className="flex gap-2">
+          <button className="secondary-button" onClick={props.onAtualizar} type="button">
+            <RefreshCw className="size-4" />
+            Atualizar
+          </button>
+          <button className="primary-button" disabled={props.salvando} onClick={props.onAbrir} type="button">
+            <ClipboardCheck className="size-4" />
+            {props.salvando ? "Abrindo..." : "Abrir contexto"}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ChecklistPanel({ pendencias, prestacaoId }: { pendencias: number; prestacaoId: string }) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white">
+      <div className="flex flex-col gap-3 px-5 pb-4 pt-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[.08em] text-[#525861]">Checklist da IN</p>
+          <h2 className="mt-1 text-2xl font-bold tracking-[-.03em]">O que precisa ser feito agora</h2>
+        </div>
+        <div className="flex items-center gap-2 text-sm font-medium text-[#66500b]">
+          <FileSpreadsheet className="size-4" />
+          {pendencias} pendências
+        </div>
+      </div>
+
+      <div className="overflow-x-auto px-5 pb-5">
+        <div className="min-w-[620px]">
+          <div className="grid grid-cols-[110px_minmax(180px,1fr)_105px_115px_70px] border-b border-[#e8ebef] px-3 py-3 text-[10px] font-bold uppercase tracking-[.05em]">
+            <span>Item</span>
+            <span>Descrição</span>
+            <span>Origem</span>
+            <span>Status</span>
+            <span>Ação</span>
+          </div>
+          <div>
+            {checklist.map((item) => (
+              <ChecklistRow item={item} key={item.codigo} prestacaoId={prestacaoId} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ChecklistRow({ item, prestacaoId }: { item: ChecklistItem; prestacaoId: string }) {
+  return (
+    <div className="grid min-h-[76px] grid-cols-[110px_minmax(180px,1fr)_105px_115px_70px] items-center border-b border-[#edf0f3] px-3 text-xs last:border-b-0 hover:bg-[#f8fafc]">
+      <div className="flex items-center gap-2">
+        <AccentDot tone={item.accent} />
+        <span className="font-medium">{item.codigo}</span>
+      </div>
+      <p className="max-w-[220px] leading-5">{item.titulo}</p>
+      <span className="leading-5 text-[#72767d]">{item.origem}</span>
+      <StatusPill tone={statusTone(item.status)}>{item.status}</StatusPill>
+      <Link className="inline-flex items-center gap-1 font-medium text-[#173e5c]" href={buildHref(item.href, prestacaoId)}>
+        Abrir <ArrowUpRight className="size-3.5" />
+      </Link>
+    </div>
+  );
+}
+
+function ProgressCard({ progresso, prestacaoId }: { progresso: number; prestacaoId: string }) {
+  return (
+    <section className="rounded-2xl border border-[#e2e8f0] bg-white p-5 shadow-[0_8px_18px_rgba(30,41,59,.08)]">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-bold uppercase tracking-[.06em] text-[#525861]">Progresso da prestação</p>
+        <div className="grid size-8 place-items-center rounded-full bg-[#f4f5f7] text-[#515760]">
+          <CircleUserRound className="size-4" />
+        </div>
+      </div>
+      <p className="mt-2 text-5xl font-extrabold tracking-[-.06em]">{progresso}%</p>
+      <div className="mt-2 h-1.5 rounded-full bg-[#d9dde2]">
+        <div className="h-full rounded-full bg-[#1768a8]" style={{ width: `${progresso}%` }} />
+      </div>
+      <p className="mt-4 text-xs leading-5">{prestacaoId ? "Contexto aberto para continuar os modelos." : "Abra o contexto para liberar o fluxo real."}</p>
+    </section>
+  );
+}
+
+function RecentCard({
+  carregando,
+  contextos,
+  onAtualizar,
+  onSelecionar
+}: {
+  carregando: boolean;
+  contextos: ContextoRecente[];
+  onAtualizar: () => void;
+  onSelecionar: (contexto: ContextoRecente) => void;
+}) {
+  return (
+    <section className="rounded-2xl border border-[#e2e8f0] bg-white p-5 shadow-[0_8px_18px_rgba(30,41,59,.08)]">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[.06em] text-[#525861]">Recentes</p>
+          <h3 className="mt-1 text-sm font-medium">Prestações abertas</h3>
+        </div>
+        <button className="grid size-8 place-items-center rounded-full bg-[#f4f5f7] text-[#515760]" onClick={onAtualizar} type="button">
+          <RefreshCw className="size-4" />
+        </button>
+      </div>
+      <div className="mt-4 space-y-2">
+        {carregando ? (
+          <EmptyState text="Carregando prestações..." />
+        ) : contextos.length ? (
+          contextos.slice(0, 3).map((contexto) => (
+            <button
+              className="w-full rounded-lg border border-[#e4e8ed] p-3 text-left transition hover:border-[#9bb9d7] hover:bg-[#f8fbff]"
+              key={contexto.prestacaoId}
+              onClick={() => onSelecionar(contexto)}
+              type="button"
+            >
+              <p className="truncate text-xs font-bold">{contexto.upc || contexto.nomeMunicipio}</p>
+              <p className="mt-1 text-[10px] text-[#64748b]">{contexto.municipio} - {contexto.ano}</p>
+            </button>
+          ))
+        ) : (
+          <EmptyState text="Nenhuma prestação recente encontrada." />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function QuickAction({
+  href,
+  icon,
+  label,
+  text,
+  tone
+}: {
+  href: string;
+  icon: ReactNode;
+  label: string;
+  text: string;
+  tone: "blue" | "yellow" | "violet";
+}) {
+  const toneClass = {
+    blue: "bg-[#1371c4]",
+    yellow: "bg-[#efa914]",
+    violet: "bg-[#7442c8]"
+  }[tone];
+
+  return (
+    <Link className="group rounded-2xl border border-[#e2e8f0] bg-white p-4 shadow-[0_8px_18px_rgba(30,41,59,.08)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(30,41,59,.11)]" href={href}>
+      <div className="flex gap-3">
+        <span className={`grid size-10 shrink-0 place-items-center rounded-xl text-white shadow-sm ${toneClass}`}>{icon}</span>
+        <span className="min-w-0">
+          <span className="flex items-center gap-1 text-sm font-medium">
+            {label}
+            <ChevronRight className="size-3.5 opacity-0 transition group-hover:opacity-100" />
+          </span>
+          <span className="mt-1 block text-xs leading-5 text-[#71757c]">{text}</span>
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+function StatusPill({ children, tone }: { children: ReactNode; tone: "success" | "warning" | "danger" | "info" }) {
+  const toneClass = {
+    success: "bg-[#dcfce7] text-[#166534]",
+    warning: "bg-[#dce9f8] text-[#173e5c]",
+    danger: "bg-[#dce9f8] text-[#173e5c]",
+    info: "bg-[#dce9f8] text-[#173e5c]"
+  }[tone];
+
+  return <span className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-[10px] font-medium leading-3 ${toneClass}`}>{children}</span>;
+}
+
+function AccentDot({ tone }: { tone: ChecklistItem["accent"] }) {
+  const toneClass = {
+    blue: "bg-[#1667a8]",
+    yellow: "bg-[#e5a11a]",
+    violet: "bg-[#8454bd]",
+    teal: "bg-[#2ba978]"
+  }[tone];
+  return <span className={`size-1.5 shrink-0 rounded-full ${toneClass}`} />;
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="rounded-xl border border-dashed border-[#d6dbe1] px-4 py-5 text-center text-xs leading-5 text-[#858990]">
+      {text}
+    </div>
+  );
+}
+
+function formatDateShort(value: string) {
+  const [, month, day] = value.split("-");
+  return day && month ? `${day}/${month}` : value;
 }

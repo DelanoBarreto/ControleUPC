@@ -32,3 +32,5 @@ Thumbs.db
 exports/
 tmp/
 Resultados/
+output/
+.playwright-cli/

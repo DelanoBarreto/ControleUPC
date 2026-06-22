@@ -15,6 +15,12 @@ const ALLOWED_EXTENSIONS = new Set([
   ".webp"
 ]);
 
+type RouteContext = {
+  params: Promise<{
+    codigo: string;
+  }>;
+};
+
 function sanitizeFileName(value: string) {
   return value
     .normalize("NFKD")
@@ -28,7 +34,8 @@ function isAllowedAttachment(filename: string) {
   return Array.from(ALLOWED_EXTENSIONS).some((extension) => lower.endsWith(extension));
 }
 
-export async function GET(request: Request) {
+export async function GET(request: Request, context: RouteContext) {
+  const { codigo } = await context.params;
   const url = new URL(request.url);
   const prestacaoContasId = url.searchParams.get("prestacao_contas_id");
 
@@ -37,6 +44,20 @@ export async function GET(request: Request) {
   }
 
   const supabase = createSupabaseServerClient();
+  const templateResult = await supabase
+    .schema("controle_upc")
+    .from("modelo_template")
+    .select("id")
+    .eq("codigo", codigo)
+    .eq("ativo", true)
+    .order("schema_version", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (templateResult.error || !templateResult.data) {
+    return NextResponse.json({ message: "Template nao encontrado." }, { status: 404 });
+  }
+
   const { data, error } = await supabase
     .schema("controle_upc")
     .from("anexo_arquivo")
@@ -44,6 +65,7 @@ export async function GET(request: Request) {
       "id, prestacao_contas_id, modelo_id, campo_modelo_id, template_id, template_campo_id, escopo, nome_original, mime_type, storage_path_original, storage_path_pdf, status, created_at"
     )
     .eq("prestacao_contas_id", prestacaoContasId)
+    .eq("template_id", templateResult.data.id)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -70,7 +92,8 @@ export async function GET(request: Request) {
   return NextResponse.json({ anexos });
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request, context: RouteContext) {
+  const { codigo } = await context.params;
   const formData = await request.formData();
   const prestacaoContasId = String(formData.get("prestacao_contas_id") ?? "");
   const templateCampoId = String(formData.get("template_campo_id") ?? "");
@@ -96,23 +119,23 @@ export async function POST(request: Request) {
   }
 
   const supabase = createSupabaseServerClient();
-  const { data: template, error: templateError } = await supabase
+  const templateResult = await supabase
     .schema("controle_upc")
     .from("modelo_template")
     .select("id")
-    .eq("codigo", "modelo_01")
+    .eq("codigo", codigo)
     .eq("ativo", true)
     .order("schema_version", { ascending: false })
     .limit(1)
     .single();
 
-  if (templateError || !template) {
-    return NextResponse.json({ message: "Template do Modelo 01 nao encontrado." }, { status: 500 });
+  if (templateResult.error || !templateResult.data) {
+    return NextResponse.json({ message: "Template nao encontrado." }, { status: 404 });
   }
 
   const attachmentId = crypto.randomUUID();
   const safeName = sanitizeFileName(arquivo.name);
-  const storagePath = `anexos-upc/${prestacaoContasId}/${attachmentId}/${safeName}`;
+  const storagePath = `anexos-upc/${prestacaoContasId}/${codigo}/${attachmentId}/${safeName}`;
   const uploadResult = await supabase.storage.from(ATTACHMENTS_BUCKET).upload(storagePath, arquivo, {
     contentType: arquivo.type || "application/octet-stream",
     upsert: true
@@ -133,7 +156,7 @@ export async function POST(request: Request) {
       prestacao_contas_id: prestacaoContasId,
       modelo_id: null,
       campo_modelo_id: null,
-      template_id: template.id,
+      template_id: templateResult.data.id,
       template_campo_id: templateCampoId.trim() || null,
       escopo,
       nome_original: arquivo.name,
